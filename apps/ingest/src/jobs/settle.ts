@@ -14,7 +14,7 @@
  * 台帳の二重計上は point_ledger の部分一意インデックスが最終防衛線。
  */
 
-import { calcPayout, parseSelection, getBoatraceBetType, type WinningEntry } from '../../../web/src/core/index.ts';
+import { settleEvent as settleEventCore } from '../../../web/src/core/settle.ts';
 import { db } from '../db.ts';
 import { getAdapter, refundEvent } from './sync.ts';
 
@@ -78,7 +78,7 @@ export async function settleDueEvents(sportCode = 'boatrace', limit = 40) {
         continue;
       }
 
-      await settleEvent(ev.id, result);
+      await settleEventCore(db(), ev.id, result as any);
       settled += 1;
       console.log(`[settle] ${ev.title} を精算しました`);
     } catch (err) {
@@ -128,7 +128,7 @@ export async function settleOldEvents(sportCode = 'boatrace', limit = 20) {
         await supabase.from('events').update({ status: 'cancelled' }).eq('id', ev.id);
         console.warn(`[settle-old] ${ev.title}: 結果が取れないため全額返還しました`);
       } else {
-        await settleEvent(ev.id, result);
+        await settleEventCore(db(), ev.id, result as any);
         console.log(`[settle-old] ${ev.title} を精算しました`);
       }
       done += 1;
@@ -139,173 +139,6 @@ export async function settleOldEvents(sportCode = 'boatrace', limit = 20) {
 
   if (done > 0) await refreshStats();
   return done;
-}
-
-/** 1レース分の精算 */
-export async function settleEvent(
-  eventId: string,
-  result: {
-    markets: { betTypeCode: string; payouts: { selection: string; payoutPer100: number; popularity?: number }[] }[];
-    placings: { rank: number; slot: string; name: string; time?: string }[];
-    refunded: string[];
-    weather: Record<string, unknown>;
-    decidedBy?: string;
-  },
-) {
-  const supabase = db();
-
-  // 結果の表示用データ
-  await supabase.from('event_results').upsert({
-    event_id: eventId,
-    placings: result.placings,
-    refunded: result.refunded,
-    weather: result.weather,
-    decided_by: result.decidedBy ?? null,
-    resolved_at: new Date().toISOString(),
-  });
-
-  const { data: markets } = await supabase
-    .from('markets')
-    .select('id, bet_type_code, status')
-    .eq('event_id', eventId);
-
-  for (const market of markets ?? []) {
-    if (market.status === 'settled' || market.status === 'void') continue;
-
-    const draft = result.markets.find((m) => m.betTypeCode === market.bet_type_code);
-    const winners: WinningEntry[] = draft?.payouts ?? [];
-
-    // ① 払戻率を保存
-    if (winners.length > 0) {
-      await supabase.from('market_results').upsert(
-        winners.map((w) => ({
-          market_id: market.id,
-          winning_selection: w.selection,
-          payout_per_100: w.payoutPer100,
-          popularity: w.popularity ?? null,
-        })),
-        { onConflict: 'market_id,winning_selection' },
-      );
-    }
-
-    // ②〜④ 投票の精算
-    await settleBetsForMarket(market.id, market.bet_type_code, winners, result.refunded);
-
-    // ⑤
-    await supabase.from('markets').update({ status: 'settled' }).eq('id', market.id);
-  }
-
-  await supabase.from('events').update({ status: 'resolved' }).eq('id', eventId);
-}
-
-/**
- * 1マーケット分の投票を確定する。
- *
- * 返還艇を含む買い目は、当たり外れに関わらず返還として扱う。
- * これは実際の舟券と同じ扱い。
- */
-async function settleBetsForMarket(
-  marketId: string,
-  betTypeCode: string,
-  winners: WinningEntry[],
-  refundedLanes: string[],
-) {
-  const supabase = db();
-
-  const { data: bets } = await supabase
-    .from('bets')
-    .select('id, user_id, season_code, selection, stake')
-    .eq('market_id', marketId)
-    .eq('status', 'placed');
-
-  if (!bets || bets.length === 0) return;
-
-  const betType = getBoatraceBetType(betTypeCode);
-  const refundSet = new Set(refundedLanes);
-
-  const won: { id: string; user_id: string; season_code: string; payout: number }[] = [];
-  const lost: string[] = [];
-  const refunded: { id: string; user_id: string; season_code: string; stake: number }[] = [];
-
-  for (const bet of bets) {
-    const lanes = parseSelection(betType, bet.selection);
-    if (lanes.some((l) => refundSet.has(l))) {
-      refunded.push(bet as any);
-      continue;
-    }
-
-    const payout = calcPayout(bet.selection, bet.stake, winners);
-    if (payout > 0) {
-      won.push({ id: bet.id, user_id: bet.user_id, season_code: bet.season_code, payout });
-    } else {
-      lost.push(bet.id);
-    }
-  }
-
-  // ④ 台帳が先。ここで失敗しても bets はまだ placed なので再実行で復旧できる。
-  if (won.length > 0) {
-    const { error } = await supabase.from('point_ledger').upsert(
-      won.map((w) => ({
-        user_id: w.user_id,
-        season_code: w.season_code,
-        entry_type: 'payout',
-        amount: w.payout,
-        ref_type: 'bet',
-        ref_id: w.id,
-      })),
-      { onConflict: 'ref_type,ref_id,entry_type', ignoreDuplicates: true },
-    );
-    if (error) throw error;
-  }
-
-  if (refunded.length > 0) {
-    const { error } = await supabase.from('point_ledger').upsert(
-      refunded.map((r) => ({
-        user_id: r.user_id,
-        season_code: r.season_code,
-        entry_type: 'refund',
-        amount: r.stake,
-        ref_type: 'bet',
-        ref_id: r.id,
-        memo: '返還艇を含むため',
-      })),
-      { onConflict: 'ref_type,ref_id,entry_type', ignoreDuplicates: true },
-    );
-    if (error) throw error;
-  }
-
-  const now = new Date().toISOString();
-
-  for (const w of won) {
-    await supabase
-      .from('bets')
-      .update({ status: 'won', payout: w.payout, settled_at: now })
-      .eq('id', w.id)
-      .eq('status', 'placed');
-  }
-
-  if (lost.length > 0) {
-    await supabase
-      .from('bets')
-      .update({ status: 'lost', payout: 0, settled_at: now })
-      .in('id', lost)
-      .eq('status', 'placed');
-  }
-
-  if (refunded.length > 0) {
-    await supabase
-      .from('bets')
-      .update({ status: 'refunded', payout: 0, settled_at: now })
-      .in(
-        'id',
-        refunded.map((r) => r.id),
-      )
-      .eq('status', 'placed');
-  }
-
-  console.log(
-    `[settle] market=${betTypeCode} 的中${won.length} 外れ${lost.length} 返還${refunded.length}`,
-  );
 }
 
 /** ランキング用の集計を作り直す */

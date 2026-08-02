@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { TabBar } from '@/components/TabBar';
 import { AutoRefresh } from '@/components/AutoRefresh';
+import { RefreshResultButton } from '@/components/RefreshResultButton';
 import { requireProfile, getBalance, getMyBets } from '@/lib/queries';
 import { fmtPt, fmtSigned, fmtDate, fmtTime, profitColor } from '@/lib/format';
 import { BOATRACE_BET_TYPES } from '@/core';
@@ -140,6 +141,15 @@ export default async function BetsPage({
                     )}
                   </span>
                 </Link>
+
+                {/* 締切を過ぎているのに結果待ちのままなら、その場で取りに行けるようにする */}
+                {!done &&
+                  ev?.id &&
+                  new Date(ev.deadline_at).getTime() < Date.now() && (
+                    <div className="px-4 py-2">
+                      <RefreshResultButton eventId={ev.id} />
+                    </div>
+                  )}
 
                 <ul>
                   {list.map((b: any) => {

@@ -18,6 +18,7 @@ import {
   getFavoriteRacers,
 } from '@/lib/queries';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { RefreshResultButton } from '@/components/RefreshResultButton';
 import { fmtTime, fmtPt, fmtSigned, laneClass, profitColor, officialLinks } from '@/lib/format';
 import { settleWaitingText } from '@/lib/settings';
 import { BOATRACE_BET_TYPES } from '@/core';
@@ -88,12 +89,17 @@ export default async function RaceDetailPage({
 
           {/* 締切後・結果待ちのあいだ、待ち時間を明示する。
               「レースは終わったのにポイントが増えない」と不安にさせないため。 */}
-          {event.status === 'closed' && !eventResult && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
-              締め切りました。結果を集計中です。
-              <br />
-              {settleWaitingText}。しばらくお待ちください。
-            </p>
+          {!eventResult && event.status !== 'scheduled' && event.status !== 'cancelled' && (
+            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2.5">
+              <p className="text-[11px] leading-relaxed text-amber-900">
+                締め切りました。結果を集計中です。
+                <br />
+                {settleWaitingText}。待てない場合は下のボタンを押してください。
+              </p>
+              <div className="mt-2">
+                <RefreshResultButton eventId={event.id} />
+              </div>
+            </div>
           )}
         </div>
 
