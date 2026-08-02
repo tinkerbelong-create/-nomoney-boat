@@ -9,7 +9,7 @@ import {
   currentSeasonCode,
 } from '@/lib/queries';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
-import { summarize } from '@nmb/core';
+import { summarize } from '@/core';
 
 export const dynamic = 'force-dynamic';
 

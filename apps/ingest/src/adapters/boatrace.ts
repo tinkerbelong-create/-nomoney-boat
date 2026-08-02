@@ -25,7 +25,7 @@ import {
   venueName,
   normalizeSelection,
   getBoatraceBetType,
-} from '@nmb/core';
+} from '../../../web/src/core/index.ts';
 import { fetchHtml } from '../http.ts';
 import type {
   SportAdapter,

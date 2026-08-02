@@ -20,7 +20,7 @@ import {
   parseBoatraceEventKey,
   type OddsMap,
   type Row,
-} from '@nmb/core';
+} from '@/core';
 import { supabaseServer } from '@/lib/supabase';
 
 /** キャッシュの有効期間 */

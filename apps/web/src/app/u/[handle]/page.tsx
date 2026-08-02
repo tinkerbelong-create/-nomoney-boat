@@ -3,7 +3,7 @@ import { Header } from '@/components/Header';
 import { supabaseServer } from '@/lib/supabase';
 import { requireProfile, getBalance, getMyStats, currentSeasonCode } from '@/lib/queries';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
-import { BOATRACE_BET_TYPES } from '@nmb/core';
+import { BOATRACE_BET_TYPES } from '@/core';
 
 export const dynamic = 'force-dynamic';
 

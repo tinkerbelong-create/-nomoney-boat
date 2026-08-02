@@ -9,7 +9,7 @@ import {
   validateStake,
   assertValidLanes,
   BOATRACE_LANES,
-} from '@nmb/core';
+} from '@/core';
 
 /**
  * 投票する。

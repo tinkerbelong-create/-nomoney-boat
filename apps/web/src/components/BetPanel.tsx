@@ -6,7 +6,7 @@
  * 実際のボートレース投票サイトの操作感に寄せている。
  *   賭け式を選ぶ → 買い方（通常/ボックス/ながし）→ 艇を選ぶ → 点数 → 確認
  *
- * 買い目の組み立ては @nmb/core の関数をそのまま使う。
+ * 買い目の組み立ては src/core の関数をそのまま使う。
  * サーバ側も同じ関数で正規化するので、表示と保存が食い違うことがない。
  */
 
@@ -22,7 +22,7 @@ import {
   estimatePayout,
   STAKE_UNIT,
   type OddsMap,
-} from '@nmb/core';
+} from '@/core';
 import { placeBets } from '@/app/actions';
 import { fmtPt, laneClass } from '@/lib/format';
 import { settleWaitingText } from '@/lib/settings';

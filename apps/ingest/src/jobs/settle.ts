@@ -14,7 +14,7 @@
  * 台帳の二重計上は point_ledger の部分一意インデックスが最終防衛線。
  */
 
-import { calcPayout, parseSelection, getBoatraceBetType, type WinningEntry } from '@nmb/core';
+import { calcPayout, parseSelection, getBoatraceBetType, type WinningEntry } from '../../../web/src/core/index.ts';
 import { db } from '../db.ts';
 import { getAdapter, refundEvent } from './sync.ts';
 

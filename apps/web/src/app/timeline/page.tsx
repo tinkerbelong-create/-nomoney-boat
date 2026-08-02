@@ -9,7 +9,7 @@ import { TabBar } from '@/components/TabBar';
 import { requireProfile, getBalance, getTimeline } from '@/lib/queries';
 import { fmtPt, fmtSigned, profitColor } from '@/lib/format';
 import { settleDelayText } from '@/lib/settings';
-import { BOATRACE_BET_TYPES } from '@nmb/core';
+import { BOATRACE_BET_TYPES } from '@/core';
 
 export const dynamic = 'force-dynamic';
 

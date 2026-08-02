@@ -1,7 +1,7 @@
 import { Header } from '@/components/Header';
 import { requireProfile, getBalance, getMyBets } from '@/lib/queries';
 import { fmtPt, fmtSigned, fmtDate, profitColor } from '@/lib/format';
-import { BOATRACE_BET_TYPES } from '@nmb/core';
+import { BOATRACE_BET_TYPES } from '@/core';
 
 export const dynamic = 'force-dynamic';
 
