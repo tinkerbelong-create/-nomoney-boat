@@ -8,7 +8,7 @@
 # 144レースぶん取り直すので30分ほどかかる。
 # =====================================================================
 
-name: 出走表を取り直す
+name: データを取り直す
 
 on:
   workflow_dispatch:
@@ -42,5 +42,14 @@ jobs:
 
       - run: npm install --no-audit --no-fund
 
+      # 開催情報（タイトル・グレード・締切時刻）を取り直す
+      - name: schedule
+        run: npm run ingest -- schedule ${{ inputs.date }}
+
+      # 出走表を取り直す
       - name: entrants-force
         run: npm run ingest -- entrants-force ${{ inputs.date }}
+
+      # 勝率などの詳細を、締切が近い順に埋める
+      - name: details
+        run: npm run ingest -- details 30

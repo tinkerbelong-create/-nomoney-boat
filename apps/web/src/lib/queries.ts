@@ -137,7 +137,7 @@ export async function getMyBets(limit = 100) {
     .from('bets')
     .select(
       `id, selection, stake, status, payout, created_at, settled_at,
-       markets!inner(bet_type_code, events!inner(title, venue_name, race_number, deadline_at))`,
+       markets!inner(bet_type_code, events!inner(id, title, venue_name, venue_code, race_number, deadline_at, status))`,
     )
     .order('created_at', { ascending: false })
     .limit(limit);

@@ -61,6 +61,15 @@ export default async function VenuePage({
             )}
             <span className="truncate text-sm font-bold">{head.title}</span>
           </div>
+
+          <a
+            href={`https://www.boatrace.jp/owpc/pc/race/raceindex?jcd=${code}&hd=${date}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block rounded-full border border-line px-3 py-1 text-xs font-semibold text-sub"
+          >
+            公式サイトで出走表・映像を見る ↗
+          </a>
         </div>
 
         <ul>

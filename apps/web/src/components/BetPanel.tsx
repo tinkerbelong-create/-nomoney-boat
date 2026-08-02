@@ -17,6 +17,7 @@ import {
   normalizeSelection,
   expandBox,
   expandNagashi,
+  expandFormation,
   parseSelection,
   combinationCount,
   estimatePayout,
@@ -27,7 +28,7 @@ import { placeBets } from '@/app/actions';
 import { fmtPt, laneClass } from '@/lib/format';
 import { settleWaitingText } from '@/lib/settings';
 
-type Mode = 'normal' | 'box' | 'nagashi';
+type Mode = 'normal' | 'box' | 'nagashi' | 'formation';
 
 interface Props {
   eventId: string;
@@ -36,11 +37,19 @@ interface Props {
   balance: number;
   deadline: string;
   serverNow: number;
+  /** 公式サイトのオッズページ。取得できなかったときの逃げ道として出す。 */
+  officialOddsUrl?: string;
 }
 
 const QUICK_STAKES = [100, 500, 1000, 5000];
 
-export function BetPanel({ eventId, markets, lanes, balance }: Props) {
+export function BetPanel({
+  eventId,
+  markets,
+  lanes,
+  balance,
+  officialOddsUrl,
+}: Props) {
   const available = BOATRACE_BET_TYPES.filter((bt) =>
     markets.some((m) => m.betTypeCode === bt.code),
   );
@@ -50,6 +59,8 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
   const [ordered, setOrdered] = useState<string[]>([]); // 通常買いの着順つき選択
   const [picked, setPicked] = useState<string[]>([]);   // ボックス/ながしの相手
   const [axis, setAxis] = useState<string | null>(null);
+  // フォーメーション。着位ごとの候補。[1着候補, 2着候補, 3着候補]
+  const [formation, setFormation] = useState<string[][]>([[], [], []]);
   const [stake, setStake] = useState(100);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -59,11 +70,13 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
   const [odds, setOdds] = useState<OddsMap>({});
   const [oddsUpdatedAt, setOddsUpdatedAt] = useState<string | null>(null);
   const [oddsLoading, setOddsLoading] = useState(false);
+  const [oddsError, setOddsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setOddsLoading(true);
     setOdds({});
+    setOddsError(null);
 
     fetch(`/api/odds/${eventId}?bt=${betTypeCode}`)
       .then((r) => r.json())
@@ -71,8 +84,9 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
         if (cancelled) return;
         setOdds(d.odds ?? {});
         setOddsUpdatedAt(d.updatedAt ?? null);
+        setOddsError(d.error ?? d.detail ?? null);
       })
-      .catch(() => {})
+      .catch((e) => !cancelled && setOddsError(String(e)))
       .finally(() => !cancelled && setOddsLoading(false));
 
     // 締切前は定期的に取り直す
@@ -101,6 +115,7 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
     setOrdered([]);
     setPicked([]);
     setAxis(null);
+    setFormation([[], [], []]);
     setMessage(null);
   };
 
@@ -124,13 +139,19 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
         return expandBox(betType, picked).map((s) => parseSelection(betType, s));
       }
 
+      if (mode === 'formation') {
+        const groups = formation.slice(0, betType.pickCount);
+        if (groups.some((g) => g.length === 0)) return [];
+        return expandFormation(betType, groups).map((s) => parseSelection(betType, s));
+      }
+
       // ながし
       if (!axis || picked.length === 0) return [];
       return expandNagashi(betType, axis, 0, picked).map((s) => parseSelection(betType, s));
     } catch {
       return [];
     }
-  }, [betType, isSingle, mode, ordered, picked, axis]);
+  }, [betType, isSingle, mode, ordered, picked, axis, formation]);
 
   /** いま選んでいる買い目（正規形）。オッズ表の強調に使う。 */
   const currentSelections = useMemo(
@@ -252,6 +273,7 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
           {(
             [
               { key: 'normal', label: '通常' },
+              { key: 'formation', label: 'フォーメーション' },
               { key: 'box', label: 'ボックス' },
               { key: 'nagashi', label: '1着ながし' },
             ] as const
@@ -290,6 +312,37 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
               selected={picked}
               onTap={togglePicked}
             />
+          </>
+        )}
+
+        {mode === 'formation' && !isSingle && (
+          <>
+            {Array.from({ length: betType.pickCount }).map((_, i) => (
+              <div key={i} className={i > 0 ? 'mt-3' : ''}>
+                <div className="mb-1 text-[11px] font-bold text-sub">
+                  {betType.selectionKind === 'combo_ordered'
+                    ? `${i + 1}着の候補`
+                    : `${i + 1}つ目の候補`}
+                </div>
+                <LaneRow
+                  lanes={lanes}
+                  selected={formation[i] ?? []}
+                  onTap={(l) => {
+                    setMessage(null);
+                    setFormation((prev) => {
+                      const next = prev.map((g) => [...g]);
+                      const g = next[i] ?? [];
+                      next[i] = g.includes(l) ? g.filter((x) => x !== l) : [...g, l];
+                      return next;
+                    });
+                  }}
+                />
+              </div>
+            ))}
+            <p className="mt-2 text-[11px] text-sub">
+              着ごとに候補を選ぶと、その組み合わせを全部まとめて買えます。
+              同じ艇が重なる組み合わせは自動で除かれます。
+            </p>
           </>
         )}
 
@@ -336,11 +389,26 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
         </div>
 
         {Object.keys(odds).length === 0 ? (
-          <p className="px-4 text-[11px] text-sub">
-            {oddsLoading
-              ? 'オッズを取得しています…'
-              : 'オッズはまだ公開されていません（投票はできます）'}
-          </p>
+          <div className="px-4">
+            <p className="text-[11px] text-sub">
+              {oddsLoading
+                ? 'オッズを取得しています…'
+                : 'オッズを表示できませんでした（投票はできます）'}
+            </p>
+            {!oddsLoading && officialOddsUrl && (
+              <a
+                href={officialOddsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block rounded-full border border-line px-4 py-1.5 text-xs font-semibold"
+              >
+                公式サイトでオッズを見る ↗
+              </a>
+            )}
+            {!oddsLoading && oddsError && (
+              <p className="mt-1 text-[10px] text-gray-400">理由: {oddsError}</p>
+            )}
+          </div>
         ) : isSingle ? (
           <div className="grid grid-cols-3 gap-1.5 px-4">
             {lanes.map((lane) => (
@@ -449,11 +517,6 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
             <p className="mt-1 text-xs text-sub">ほか{selections.length - 20}点</p>
           )}
 
-          {!oddsLoading && Object.keys(odds).length === 0 && (
-            <p className="mt-1 text-[11px] text-sub">
-              この賭け式のオッズは取得できませんでした（投票はできます）
-            </p>
-          )}
         </div>
       )}
 

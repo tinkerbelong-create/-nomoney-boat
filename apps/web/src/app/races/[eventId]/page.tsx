@@ -18,7 +18,7 @@ import {
   getFavoriteRacers,
 } from '@/lib/queries';
 import { FavoriteButton } from '@/components/FavoriteButton';
-import { fmtTime, fmtPt, fmtSigned, laneClass, profitColor } from '@/lib/format';
+import { fmtTime, fmtPt, fmtSigned, laneClass, profitColor, officialLinks } from '@/lib/format';
 import { settleWaitingText } from '@/lib/settings';
 import { BOATRACE_BET_TYPES } from '@/core';
 
@@ -50,6 +50,7 @@ export default async function RaceDetailPage({
   const entrants = [...(event.event_entrants ?? [])].sort(
     (a: any, b: any) => a.sort_order - b.sort_order,
   );
+  const official = officialLinks(event.external_key);
   const eventResult = Array.isArray(event.event_results)
     ? event.event_results[0]
     : event.event_results;
@@ -96,6 +97,29 @@ export default async function RaceDetailPage({
           )}
         </div>
 
+        {/* 公式サイトの詳しい情報。展示タイムや気象までは取り込んでいないので、
+            予想したい人はここから公式へ飛べるようにしている。 */}
+        {official && (
+          <div className="flex gap-1.5 overflow-x-auto border-b border-line px-4 py-2.5">
+            {[
+              { href: official.racelist, label: '出走表' },
+              { href: official.beforeinfo, label: '直前情報' },
+              { href: official.odds, label: 'オッズ' },
+              { href: official.result, label: '結果' },
+            ].map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-sub"
+              >
+                {l.label} ↗
+              </a>
+            ))}
+          </div>
+        )}
+
         {/* 出走表 */}
         <section>
           <h2 className="bg-gray-50 px-4 py-1.5 text-[11px] font-bold text-sub">出走表</h2>
@@ -112,7 +136,6 @@ export default async function RaceDetailPage({
                 const rates: string[] = Array.isArray(m.rates) ? m.rates : [];
                 const win = m.nationalWin ?? rates[0];
                 const top2 = m.nationalTop2 ?? rates[1];
-                const motor = m.motorTop2 ?? rates[6];
 
                 return (
                   <li
@@ -141,12 +164,15 @@ export default async function RaceDetailPage({
                       </div>
                     </div>
 
-                    <div className="tabnum shrink-0 text-right text-[10px] leading-tight text-sub">
-                      <div>
-                        勝率 <span className="text-sm font-bold text-ink">{win ?? '—'}</span>
+                    <div className="shrink-0 text-right">
+                      <div className="tabnum text-base font-bold leading-tight">
+                        {win ?? '—'}
                       </div>
-                      <div>2連率 {top2 ? `${top2}%` : '—'}</div>
-                      <div>モーター {motor ? `${motor}%` : '—'}</div>
+                      <div className="text-[10px] leading-tight text-sub">勝率</div>
+                      <div className="tabnum mt-1 text-sm font-semibold leading-tight">
+                        {top2 ? `${Math.round(Number(top2))}%` : '—'}
+                      </div>
+                      <div className="text-[10px] leading-tight text-sub">2連率</div>
                     </div>
 
                     {m.racerId && (
@@ -273,6 +299,7 @@ export default async function RaceDetailPage({
             balance={balance}
             deadline={event.deadline_at}
             serverNow={serverNow}
+            officialOddsUrl={official?.odds}
           />
         )}
       </main>

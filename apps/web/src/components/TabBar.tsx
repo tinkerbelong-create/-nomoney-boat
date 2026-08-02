@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   { href: '/', label: 'ランキング', icon: '🏆' },
   { href: '/races', label: 'レース', icon: '🚤' },
+  { href: '/me/bets', label: '舟券', icon: '🎫' },
   { href: '/timeline', label: 'みんな', icon: '📣' },
   { href: '/me', label: 'マイ', icon: '👤' },
 ];
@@ -19,9 +20,15 @@ export function TabBar() {
                  border-t border-line bg-white/95 backdrop-blur"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {TABS.map((t) => {
-          const active = t.href === '/' ? path === '/' : path.startsWith(t.href);
+          // 「マイ」は /me/bets のときに光らせない（舟券タブと重なるため）
+          const active =
+            t.href === '/'
+              ? path === '/'
+              : t.href === '/me'
+                ? path === '/me' || (path.startsWith('/me/') && !path.startsWith('/me/bets'))
+                : path.startsWith(t.href);
           return (
             <li key={t.href}>
               <Link

@@ -51,3 +51,28 @@ export function timeLeft(deadlineIso: string, nowMs: number): string {
   if (m >= 1) return `あと${m}分`;
   return `あと${Math.floor(diff / 1000)}秒`;
 }
+
+/**
+ * 公式サイト（boatrace.jp）の各ページへのリンク。
+ *
+ * 出走表の細かいデータ（展示タイム・部品交換・気象など）まではこちらで
+ * 取り込んでいないので、詳しく見たい人は公式へ飛べるようにしておく。
+ * 舟券を買うページではなく、情報ページだけを案内する。
+ */
+export function officialLinks(externalKey: string | null | undefined) {
+  const parts = String(externalKey ?? '').split(':'); // boatrace:YYYYMMDD:jcd:rno
+  const hd = parts[1];
+  const jcd = parts[2];
+  const rno = Number(parts[3]);
+  if (!hd || !jcd || !Number.isFinite(rno)) return null;
+
+  const base = 'https://www.boatrace.jp/owpc/pc/race';
+  const q = `rno=${rno}&jcd=${jcd}&hd=${hd}`;
+  return {
+    racelist: `${base}/racelist?${q}`,
+    odds: `${base}/odds3t?${q}`,
+    beforeinfo: `${base}/beforeinfo?${q}`,
+    result: `${base}/raceresult?${q}`,
+    venueIndex: `${base}/raceindex?jcd=${jcd}&hd=${hd}`,
+  };
+}

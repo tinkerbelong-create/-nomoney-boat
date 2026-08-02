@@ -23,8 +23,20 @@ import {
 } from '@/core';
 import { supabaseServer } from '@/lib/supabase';
 
+/**
+ * 公式サイトのページは1枚あたり10秒近くかかることがある。
+ * Vercel の関数はなにも指定しないと10秒で打ち切られるため、
+ * オッズが「取得できませんでした」になっていた。
+ * 無料プランで指定できる上限まで延ばしておく。
+ */
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 /** キャッシュの有効期間 */
 const TTL_MS = 90_000;
+
+/** 公式サイトを待つ上限。これを超えたら諦めて画面に理由を返す。 */
+const FETCH_TIMEOUT_MS = 25_000;
 
 const USER_AGENT =
   process.env.INGEST_USER_AGENT ??
@@ -81,13 +93,31 @@ export async function GET(
       `?rno=${raceNo}&jcd=${venueCode}&hd=${dateYmd}`;
 
     const res = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'ja' },
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ja',
+      },
       cache: 'no-store',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const html = await res.text();
     const { odds, updatedAt } = parseOddsPage(html, betType);
+
+    // 何も取れなかったときは、原因の手がかりを返す。
+    // 「まだ公開されていない」のか「読み取りに失敗した」のかを画面で見分けたい。
+    if (Object.keys(odds).length === 0) {
+      const hasHeading = html.includes(HEADINGS[betType] ?? '');
+      return NextResponse.json({
+        odds: {},
+        updatedAt,
+        detail: hasHeading
+          ? 'ページは取得できましたが、オッズがまだ入っていません'
+          : 'ページの形が想定と違います',
+      });
+    }
 
     if (Object.keys(odds).length > 0) {
       await supabase.rpc('upsert_market_odds', {
@@ -111,7 +141,10 @@ export async function GET(
         stale: true,
       });
     }
-    return NextResponse.json({ odds: {}, error: 'fetch failed' });
+    return NextResponse.json({
+      odds: {},
+      error: err instanceof Error ? err.message : '取得に失敗しました',
+    });
   }
 }
 
