@@ -175,14 +175,28 @@ function collectRows($: cheerio.CheerioAPI, heading: string | undefined): Row[] 
       .get() as unknown as Row[];
 
   if (heading) {
-    let found: Row[] | null = null;
-    $('h2, h3, h4, caption').each((_, el) => {
-      if (found) return;
-      if (!$(el).text().includes(heading)) return;
-      const table = $(el).nextAll('table').first();
-      if (table.length) found = toRows(table);
-    });
-    if (found) return found;
+    // 見出しと表を「HTML上の登場順」で並べ、見出しの直後に来た最初の表を採る。
+    //
+    // 以前は nextAll('table') を使っていたが、これは「同じ親の中の兄弟」しか
+    // 見ないため、見出しと表が別の div に入っている公式サイトでは見つからず、
+    // 「ページ内で一番大きい表」という予備の方法に落ちていた。
+    // 2連単・2連複のように1ページに同じ大きさの表が2つあると、
+    // 2連複を選んだのに2連単の表を読んでしまう。
+    const flat = heading.replace(/\s+/g, '');
+    const nodes = $('h1, h2, h3, h4, h5, caption, table').toArray();
+    let passed = false;
+    for (const el of nodes) {
+      const tag = (el as any).tagName?.toLowerCase();
+      if (tag === 'table') {
+        if (passed) {
+          const rows = toRows($(el));
+          // 見出し直後が空の表だった場合に備え、中身があるものだけ採用する
+          if (rows.some((r) => r.length > 1)) return rows;
+        }
+        continue;
+      }
+      if ($(el).text().replace(/\s+/g, '').includes(flat)) passed = true;
+    }
   }
 
   let best: Row[] = [];

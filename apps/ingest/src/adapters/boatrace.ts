@@ -98,7 +98,7 @@ export class BoatraceAdapter implements SportAdapter {
     if (/データがありません/.test($('body').text())) return [];
 
     const title = cleanText($('h2, h3').first().text()) || `${venueName(jcd)} 開催`;
-    const grade = detectGrade(html);
+    const grade = detectGradeFromTitle(title);
     const cancelled = /中止/.test($('body').text()) && !/中止順延/.test($('body').text());
 
     // 「1R 〜 12R」と締切時刻の対応を取る。
@@ -138,13 +138,143 @@ export class BoatraceAdapter implements SportAdapter {
     const html = await fetchHtml(
       `${BASE}/racelist?rno=${raceNo}&jcd=${venueCode}&hd=${dateYmd}`,
     );
+    return parseEntrants(html, externalKey);
+  }
+
+  /**
+   * 1つの場の全レースの出走メンバーを、1回のアクセスでまとめて取る。
+   *
+   * レース一覧ページには12レース分の選手名・登録番号・級別がすべて載っている。
+   * レースごとに出走表ページを開くと144アクセス・30分かかっていたのが、
+   * これなら開催場の数（十数回）で済む。
+   *
+   * ただし勝率やモーターの数字までは載っていない。
+   * そちらは利用者がそのレースを開いたときにオッズと同じ要領で取りに行く。
+   */
+  async fetchVenueEntrants(
+    dateYmd: string,
+    jcd: string,
+  ): Promise<Map<number, EntrantDraft[]>> {
+    const html = await fetchHtml(`${BASE}/raceindex?jcd=${jcd}&hd=${dateYmd}`);
+    return parseVenueEntrants(html);
+  }
+
+  // -------------------------------------------------------------------
+  // 結果（確定払戻金）
+  // -------------------------------------------------------------------
+
+  async fetchResult(externalKey: string): Promise<ResultDraft | null> {
+    const { dateYmd, venueCode, raceNo } = parseBoatraceEventKey(externalKey);
+    const html = await fetchHtml(
+      `${BASE}/raceresult?rno=${raceNo}&jcd=${venueCode}&hd=${dateYmd}`,
+    );
     const $ = cheerio.load(html);
+    const bodyText = $('body').text();
 
-    if (/データがありません/.test($('body').text())) return [];
+    if (/データがありません/.test(bodyText)) return null;
 
-    const entrants: EntrantDraft[] = [];
+    // 中止の判定。結果が出ていないのに中止表記がある場合。
+    if (/中止/.test(bodyText) && !/払戻金/.test(bodyText)) {
+      return {
+        status: 'cancelled',
+        markets: [],
+        placings: [],
+        refunded: [],
+        weather: {},
+      };
+    }
 
-    // 出走表は「1艇 = 1 tbody」の構造。艇番セルを起点に読む。
+    const payoutRows = extractPayoutRows($);
+    if (payoutRows.length === 0) return null; // まだ確定していない
+
+    return {
+      status: 'resolved',
+      markets: buildMarkets(payoutRows),
+      placings: extractPlacings($),
+      refunded: extractRefunded($),
+      weather: extractWeather($),
+      decidedBy: extractDecidedBy($),
+    };
+  }
+}
+
+// =====================================================================
+// 出走表の解析（テストできるよう通信と切り離してある）
+// =====================================================================
+
+/**
+ * レース一覧ページ（raceindex）から、レース番号ごとの出走メンバーを取る。
+ *
+ * 1行が1レースで、行の中に選手ページへのリンクが6つ並ぶ。
+ * リンクの href に登録番号（toban）が入っているのでそこから拾い、
+ * 級別は同じセルの文字から拾う。艇番は並び順（公式は必ず1号艇から）。
+ */
+export function parseVenueEntrants(html: string): Map<number, EntrantDraft[]> {
+  const $ = cheerio.load(html);
+  const out = new Map<number, EntrantDraft[]>();
+
+  $('tr').each((_, tr) => {
+    const $tr = $(tr);
+    const cells = $tr.find('td');
+    if (cells.length < 4) return;
+
+    const rm = /^(\d{1,2})R$/.exec(cleanText(cells.eq(0).text()));
+    if (!rm) return;
+    const raceNo = Number(rm[1]);
+    if (out.has(raceNo)) return;
+
+    const racers: { toban: string; name: string; cls?: string }[] = [];
+    cells.each((__, td) => {
+      const $td = $(td);
+      const a = $td.find('a[href*="racersearch"]').first();
+      if (!a.length) return;
+      const toban = /toban=(\d+)/.exec(a.attr('href') ?? '')?.[1];
+      const name = cleanText(a.text());
+      if (!toban || !name) return;
+      // 同じセルに複数の選手が入ることはない
+      if (racers.some((r) => r.toban === toban && r.name === name)) {
+        // 同一選手が同じレースに2回出ることはないので、重複は別セルの取り違え
+      }
+      racers.push({
+        toban,
+        name,
+        cls: /(A1|A2|B1|B2)/.exec(cleanText($td.text()))?.[1],
+      });
+    });
+
+    if (racers.length < 2) return;
+
+    out.set(
+      raceNo,
+      racers.slice(0, 6).map((r, i) => ({
+        slotCode: String(i + 1),
+        numberLabel: `${i + 1}号艇`,
+        name: r.name,
+        meta: { racerId: r.toban, racerClass: r.cls },
+        sortOrder: i + 1,
+      })),
+    );
+  });
+
+  return out;
+}
+
+export function parseEntrants(html: string, externalKey: string): EntrantDraft[] {
+  const $ = cheerio.load(html);
+
+  if (/データがありません/.test($('body').text())) return [];
+
+  const entrants: EntrantDraft[] = [];
+
+    // 出走表は「1艇 = 1 tbody」の構造。
+    //
+    // 1行目のセルの並びは次のとおり（2行目以降は rowspan で省略される）。
+    //   枠 / 写真 / 登録番号・級別・氏名・支部・年齢体重 / F数・L数・平均ST /
+    //   全国(勝率・2連率・3連率) / 当地(同) / モーター(No・2連率・3連率) /
+    //   ボート(同) / 今節成績…
+    //
+    // 「F数 L数 平均ST」のセルを目印にして、そこから右へ数えることで
+    // レイアウトが多少変わっても崩れないようにしている。
     $('table tbody').each((_, tbody) => {
       const $tb = $(tbody);
       const text = cleanText($tb.text());
@@ -154,20 +284,79 @@ export class BoatraceAdapter implements SportAdapter {
       const regMatch = /(\d{4})\s*\/?\s*(A1|A2|B1|B2)/.exec(text);
       if (!regMatch) return;
 
-      const name = extractRacerName($, $tb);
-      const nums = text.match(/\d+\.\d{2}/g) ?? [];
+      const $tds = $tb.find('tr').first().find('td');
+      const tdText = $tds.map((__, td) => cleanText($(td).text())).get();
+
+      // セルの中身は <br> 区切りで数値が縦に3つ並ぶ。
+      // テキストをそのまま繋げると「53」と「33.95」が「5333.95」になって
+      // 桁が壊れるので、必ず <br> で切ってから読む。
+      const parts = (i: number) => splitByBr($tds.eq(i).html());
+
+      // 「F0 / L0 / 平均ST」のセルの位置。
+      // ここから +1 が全国、+2 が当地、+3 がモーター、+4 がボート。
+      const stIdx = tdText.findIndex((t) => /F\s*\d/.test(t) && /L\s*\d/.test(t));
+      const isDec = (s: string) => /^\d+\.\d+$/.test(s);
+
+      let avgSt: string | undefined;
+      let national: string[] = [];
+      let local: string[] = [];
+      let motorCell: string[] = [];
+      let boatCell: string[] = [];
+      let profile = '';
+
+      if (stIdx >= 0) {
+        avgSt = parts(stIdx).filter(isDec).at(-1);
+        national = parts(stIdx + 1).filter(isDec);
+        local = parts(stIdx + 2).filter(isDec);
+        motorCell = parts(stIdx + 3);
+        boatCell = parts(stIdx + 4);
+        profile = parts(stIdx - 1).join(' ');
+      } else {
+        // 予備。セルの構造が変わったときは、選手ブロック全体の数値の並びから拾う。
+        // 並びは 平均ST → 全国3つ → 当地3つ → モーター2つ → ボート2つ。
+        console.warn(`[boatrace] ${externalKey}: 成績欄の位置を特定できませんでした`);
+        const all = text.match(/\d+\.\d{2}/g) ?? [];
+        avgSt = all[0];
+        national = all.slice(1, 4);
+        local = all.slice(4, 7);
+        motorCell = ['', ...all.slice(7, 9)];
+        boatCell = ['', ...all.slice(9, 11)];
+        profile = text;
+      }
+
+      const motor = motorCell.filter(isDec);
+      const boat = boatCell.filter(isDec);
+
+      const place = /([一-龥ヶ]{2,4})\s*\/\s*([一-龥ヶ]{2,4})/.exec(profile);
+      const body = /(\d{1,2})歳\s*\/\s*([\d.]+)kg/.exec(profile.replace(/\s+/g, ''));
 
       entrants.push({
         // 艇番はこの時点では仮。全部読み終わってから確定させる。
         slotCode: detectLaneNumber($, $tb) ?? '',
         numberLabel: '',
-        name,
+        name: extractRacerName($, $tb),
         meta: {
           racerId: regMatch[1],
           racerClass: regMatch[2],
-          // 全国勝率・全国2連率・当地勝率・当地2連率・モーター2連率・ボート2連率の順で
-          // 並ぶことが多いが、レイアウト変更に備えて生の並びも残しておく
-          rates: nums.slice(0, 8),
+          branch: place?.[1],
+          hometown: place?.[2],
+          age: body?.[1],
+          weight: body?.[2],
+          avgSt,
+          nationalWin: national[0],
+          nationalTop2: national[1],
+          nationalTop3: national[2],
+          localWin: local[0],
+          localTop2: local[1],
+          localTop3: local[2],
+          motorNo: motorCell.find((s) => /^\d+$/.test(s)),
+          motorTop2: motor[0],
+          motorTop3: motor[1],
+          boatNo: boatCell.find((s) => /^\d+$/.test(s)),
+          boatTop2: boat[0],
+          boatTop3: boat[1],
+          // 旧表示との互換。先頭が全国勝率になるようにしてある。
+          rates: [...national, ...local, ...motor, ...boat],
         },
         sortOrder: 0,
       });
@@ -218,50 +407,7 @@ export class BoatraceAdapter implements SportAdapter {
       return true;
     });
 
-    return unique.sort((a, b) => a.sortOrder - b.sortOrder);
-  }
-
-  // -------------------------------------------------------------------
-  // 結果（確定払戻金）
-  // -------------------------------------------------------------------
-
-  async fetchResult(externalKey: string): Promise<ResultDraft | null> {
-    const { dateYmd, venueCode, raceNo } = parseBoatraceEventKey(externalKey);
-    const html = await fetchHtml(
-      `${BASE}/raceresult?rno=${raceNo}&jcd=${venueCode}&hd=${dateYmd}`,
-    );
-    const $ = cheerio.load(html);
-    const bodyText = $('body').text();
-
-    if (/データがありません/.test(bodyText)) return null;
-
-    // 中止の判定。結果が出ていないのに中止表記がある場合。
-    if (/中止/.test(bodyText) && !/払戻金/.test(bodyText)) {
-      return {
-        status: 'cancelled',
-        markets: [],
-        placings: [],
-        refunded: [],
-        weather: {},
-      };
-    }
-
-    const payoutRows = extractPayoutRows($);
-    if (payoutRows.length === 0) return null; // まだ確定していない
-
-    const markets = buildMarkets(payoutRows);
-    const placings = extractPlacings($);
-    const refunded = extractRefunded($);
-
-    return {
-      status: 'resolved',
-      markets,
-      placings,
-      refunded,
-      weather: extractWeather($),
-      decidedBy: extractDecidedBy($),
-    };
-  }
+  return unique.sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 // =====================================================================
@@ -334,39 +480,90 @@ export function jstToDate(dateYmd: string, hhmm: string): Date {
   return new Date(`${y}-${m}-${d}T${hh!.padStart(2, '0')}:${mm}:00+09:00`);
 }
 
-function detectGrade(html: string): string | undefined {
-  if (/SG/.test(html)) return 'SG';
-  if (/PG\s?1|PG１/.test(html)) return 'PG1';
-  if (/G1|Ｇ１/.test(html)) return 'G1';
-  if (/G2|Ｇ２/.test(html)) return 'G2';
-  if (/G3|Ｇ３/.test(html)) return 'G3';
+/**
+ * グレード（SG / G1 など）の判定。
+ *
+ * 以前はページのHTML全体を見ていたが、公式サイトはどのページにも
+ * 「SG・PG1スケジュール」というメニューのリンクを載せている。
+ * そのため全レースがSGと判定されていた。
+ *
+ * グレードは公式サイトでは画像のバッジで表示されており、文字としては
+ * 開催タイトルにしか現れない。誤ったバッジを出すくらいなら出さないほうがよいので、
+ * 開催タイトルにグレード表記があるときだけ返す。
+ */
+export function detectGradeFromTitle(title: string): string | undefined {
+  const t = title.replace(/[Ｇ]/g, 'G').replace(/[０-９]/g, (c) =>
+    String.fromCharCode(c.charCodeAt(0) - 0xfee0),
+  );
+  if (/\bSG\b/.test(t)) return 'SG';
+  if (/\bPG\s?1\b/.test(t)) return 'PG1';
+  if (/\bG1\b/.test(t)) return 'G1';
+  if (/\bG2\b/.test(t)) return 'G2';
+  if (/\bG3\b/.test(t)) return 'G3';
   return undefined;
 }
 
-/** 選手ブロックから艇番(1-6)を拾う */
+/**
+ * セルの中身を <br> で分けて、行ごとの文字列にする。
+ *
+ * 公式の出走表は1つのセルに「モーターNo / 2連率 / 3連率」を縦に並べている。
+ * cheerio の .text() は <br> を無視して繋げてしまうため、
+ * 「53」と「33.95」が「5333.95」になり桁が壊れる。
+ * HTMLの段階で切ってから中のタグを落とす。
+ */
+function splitByBr(html: string | null): string[] {
+  if (!html) return [];
+  return html
+    .split(/<br\s*\/?>/i)
+    .map((chunk) => cleanText(chunk.replace(/<[^>]*>/g, ' ')))
+    .filter((s) => s.length > 0);
+}
+
+/** 全角数字を半角に直す */
+function toHalfWidthDigits(s: string): string {
+  return s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+}
+
+/**
+ * 選手ブロックから艇番(1-6)を拾う。
+ *
+ * 公式サイトの「枠」欄は全角数字（１〜６）で書かれている。
+ * 以前は半角しか見ていなかったため艇番をまったく読めず、
+ * 代わりに今節成績の数字を拾って6艇とも同じ番号になっていた。
+ */
 function detectLaneNumber($: cheerio.CheerioAPI, $tb: cheerio.Cheerio<any>): string | null {
+  // クラス名 is-boatColor1 などが最も確実
+  const cls = $tb.find('[class*="boatColor"]').first().attr('class') ?? '';
+  const byClass = /boatColor([1-6])/.exec(cls);
+  if (byClass) return byClass[1]!;
+
   let lane: string | null = null;
   $tb.find('td').each((_, td) => {
     if (lane) return;
-    const t = cleanText($(td).text());
+    const t = toHalfWidthDigits(cleanText($(td).text()));
     if (/^[1-6]$/.test(t)) lane = t;
   });
-  if (lane) return lane;
-
-  // クラス名 is-boatColor1 などから拾う保険
-  const cls = $tb.find('[class*="boatColor"]').first().attr('class') ?? '';
-  const m = /boatColor([1-6])/.exec(cls);
-  return m ? m[1]! : null;
+  return lane;
 }
 
-/** 選手名。全角スペース区切りの日本語氏名を拾う */
+/**
+ * 選手名。
+ *
+ * 選手ページへのリンクは1つの選手ブロックに2つある。
+ * 先に出てくるのは顔写真のリンクで、中身が画像なのでテキストは空。
+ * 以前は .first() でこちらを拾ってしまい、名前がずっと空だった。
+ * 文字が入っているリンクを選ぶ。
+ */
 function extractRacerName($: cheerio.CheerioAPI, $tb: cheerio.Cheerio<any>): string {
-  const link = $tb.find('a[href*="racersearch"]').first();
-  if (link.length) return cleanText(link.text());
+  let name = '';
+  $tb.find('a[href*="racersearch"]').each((_, a) => {
+    if (name) return;
+    const t = cleanText($(a).text());
+    if (t && !/^\d+$/.test(t)) name = t;
+  });
+  if (name) return name;
 
-  const m = /([一-龥゠-ヿ]{1,5}[\s　]+[一-龥゠-ヿ]{1,5})/.exec(
-    cleanText($tb.text()),
-  );
+  const m = /([一-龥゠-ヿ]{1,5}[\s　]+[一-龥゠-ヿ]{1,5})/.exec(cleanText($tb.text()));
   return m ? m[1]!.replace(/\s+/g, ' ') : '';
 }
 

@@ -1,0 +1,46 @@
+# =====================================================================
+# 出走表を取り直す（手動実行専用）
+#
+# ふだんは daily の entrants が「まだ取っていないレース」だけを取り込む。
+# 読み取りの不具合を直したあとは、すでに入っている間違ったデータを
+# 上書きしたいので、こちらを Actions の画面から手で実行する。
+#
+# 144レースぶん取り直すので30分ほどかかる。
+# =====================================================================
+
+name: 出走表を取り直す
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '日付 (YYYYMMDD)。空なら今日と明日'
+        required: false
+        default: ''
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      INGEST_USER_AGENT: ${{ vars.INGEST_USER_AGENT }}
+      TZ: Asia/Tokyo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm install --no-audit --no-fund
+
+      - name: entrants-force
+        run: npm run ingest -- entrants-force ${{ inputs.date }}

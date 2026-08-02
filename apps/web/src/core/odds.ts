@@ -32,7 +32,15 @@ export type Row = string[];
 
 const LANES = ['1', '2', '3', '4', '5', '6'];
 
-const isOdds = (s: string) => /^\d+(\.\d+)?$/.test(s) && s.includes('.');
+/**
+ * オッズに見えるセルかどうか。
+ *
+ * 公式サイトは 1000倍を超えるオッズを「1587」のように小数点なしで表示する。
+ * 以前は「小数点があること」を条件にしていたため、この高オッズのセルを
+ * 見落として行がずれ、表全体の対応が崩れていた。
+ * 艇番（1〜6）と区別できればよいので、10以上の整数もオッズとして扱う。
+ */
+const isOdds = (s: string) => /^\d+(\.\d+)?$/.test(s) && (s.includes('.') || Number(s) >= 10);
 const isLane = (s: string) => /^[1-6]$/.test(s);
 
 /**
@@ -203,10 +211,19 @@ export function parsePlaceOdds(rows: Row[]): OddsMap {
   const out: OddsMap = {};
   for (const cells of rows) {
     const lane = cells.find(isLane);
-    const range = cells.find((c) => /^\d+\.\d+\s*[-〜～]\s*\d+\.\d+$/.test(c));
-    if (!lane || !range) continue;
-    const low = Number(range.split(/[-〜～]/)[0]!.trim());
-    if (!(lane in out) && Number.isFinite(low)) out[lane] = low;
+    if (!lane || lane in out) continue;
+
+    // 「1.3-2.3」のような範囲表記。区切りが半角/全角どちらでも拾う。
+    const range = cells.find((c) => /^\d+(\.\d+)?\s*[-〜~～]\s*\d+(\.\d+)?$/.test(c));
+    if (range) {
+      const low = Number(range.split(/[-〜~～]/)[0]!.trim());
+      if (Number.isFinite(low)) out[lane] = low;
+      continue;
+    }
+
+    // 範囲ではなく単独の数値で出ているレイアウトにも備える
+    const single = cells.find(isOdds);
+    if (single) out[lane] = Number(single);
   }
   return out;
 }

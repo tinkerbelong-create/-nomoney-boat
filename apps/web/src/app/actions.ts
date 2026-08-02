@@ -160,3 +160,60 @@ export async function signOut() {
   await supabase.auth.signOut();
   redirect('/login');
 }
+
+// =====================================================================
+// お気に入り選手
+// =====================================================================
+
+/** お気に入りに追加する。10人を超えるとデータベース側で弾かれる。 */
+export async function addFavoriteRacer(formData: FormData) {
+  const racerId = String(formData.get('racerId') ?? '').trim();
+  const name = String(formData.get('name') ?? '').trim();
+  if (!/^\d{3,5}$/.test(racerId)) {
+    return { ok: false as const, error: '選手を特定できませんでした' };
+  }
+
+  const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: 'ログインしてください' };
+
+  const { error } = await supabase
+    .from('favorite_racers')
+    .insert({ user_id: user.id, racer_id: racerId, name });
+
+  if (error) {
+    if (error.code === '23505') return { ok: true as const }; // すでに登録済み
+    if (/10人まで/.test(error.message)) {
+      return { ok: false as const, error: 'お気に入り選手は10人までです' };
+    }
+    return { ok: false as const, error: error.message };
+  }
+
+  revalidatePath('/races');
+  revalidatePath('/me/favorites');
+  return { ok: true as const };
+}
+
+export async function removeFavoriteRacer(formData: FormData) {
+  const racerId = String(formData.get('racerId') ?? '').trim();
+
+  const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: 'ログインしてください' };
+
+  const { error } = await supabase
+    .from('favorite_racers')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('racer_id', racerId);
+
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath('/races');
+  revalidatePath('/me/favorites');
+  return { ok: true as const };
+}

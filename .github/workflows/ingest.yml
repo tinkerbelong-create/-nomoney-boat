@@ -55,6 +55,10 @@ jobs:
       # npm install で毎回入れ直す（1分ほど）。
       - run: npm install --no-audit --no-fund
 
+      # 締切が近い順に、出走表の詳細（勝率など）を少しずつ埋める
+      - name: details
+        run: npm run ingest -- details 15
+
       # 締切を過ぎたマーケットを閉じる
       - name: close
         run: npm run ingest -- close

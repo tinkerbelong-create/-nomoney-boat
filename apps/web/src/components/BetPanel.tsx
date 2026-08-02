@@ -132,6 +132,39 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
     }
   }, [betType, isSingle, mode, ordered, picked, axis]);
 
+  /** いま選んでいる買い目（正規形）。オッズ表の強調に使う。 */
+  const currentSelections = useMemo(
+    () => selections.map((picks) => normalizeSelection(betType, picks)),
+    [selections, betType],
+  );
+
+  /**
+   * オッズ表を「1着（順不同なら最小の艇番）ごとの列」に組み替える。
+   * 公式サイトのオッズ表と同じ並びになるようにしている。
+   */
+  const oddsGroups = useMemo(() => {
+    const sep = betType.selectionKind === 'combo_unordered' ? '=' : '-';
+    const map = new Map<string, { sel: string; rest: string; o: number }[]>();
+
+    for (const [sel, o] of Object.entries(odds)) {
+      const parts = sel.split(/[-=]/);
+      const head = parts[0]!;
+      if (!map.has(head)) map.set(head, []);
+      map.get(head)!.push({ sel, rest: parts.slice(1).join(sep), o });
+    }
+
+    return [...map.entries()].sort((a, b) => Number(a[0]) - Number(b[0]));
+  }, [odds, betType]);
+
+  /** オッズ表をタップしたら、その買い目をそのまま選択する */
+  const pickSelection = (sel: string) => {
+    setMessage(null);
+    setMode('normal');
+    setPicked([]);
+    setAxis(null);
+    setOrdered(parseSelection(betType, sel));
+  };
+
   const total = selections.length * stake;
   const overBalance = total > balance;
 
@@ -287,6 +320,94 @@ export function BetPanel({ eventId, markets, lanes, balance }: Props) {
           </>
         )}
       </div>
+
+      {/* オッズ表。選ぶ前から見られるようにしている。
+          タップするとその買い目がそのまま選択される。 */}
+      <section className="mt-4">
+        <div className="mb-1 flex items-baseline justify-between px-4">
+          <span className="text-[11px] font-bold text-sub">オッズ</span>
+          <span className="text-[10px] text-sub">
+            {oddsLoading
+              ? '読み込み中…'
+              : oddsUpdatedAt
+                ? `${oddsUpdatedAt} 時点`
+                : ''}
+          </span>
+        </div>
+
+        {Object.keys(odds).length === 0 ? (
+          <p className="px-4 text-[11px] text-sub">
+            {oddsLoading
+              ? 'オッズを取得しています…'
+              : 'オッズはまだ公開されていません（投票はできます）'}
+          </p>
+        ) : isSingle ? (
+          <div className="grid grid-cols-3 gap-1.5 px-4">
+            {lanes.map((lane) => (
+              <button
+                key={lane}
+                onClick={() => pickSelection(lane)}
+                className={`flex items-center justify-between rounded-lg border px-2 py-1.5
+                            ${
+                              ordered[0] === lane
+                                ? 'border-ink bg-amber-50'
+                                : 'border-line'
+                            }`}
+              >
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold ${laneClass(
+                    lane,
+                  )}`}
+                >
+                  {lane}
+                </span>
+                <span className="tabnum text-sm font-bold">
+                  {odds[lane] ? odds[lane].toFixed(1) : '—'}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto px-4 pb-1">
+            <div className="flex min-w-max gap-1.5">
+              {oddsGroups.map(([head, items]) => (
+                <div key={head} className="w-[86px] shrink-0">
+                  <div
+                    className={`mb-1 rounded py-0.5 text-center text-xs font-bold ${laneClass(
+                      head,
+                    )}`}
+                  >
+                    {head}
+                  </div>
+                  <ul className="divide-y divide-line/60 overflow-hidden rounded border border-line">
+                    {items.map((it) => {
+                      const on = currentSelections.includes(it.sel);
+                      return (
+                        <li key={it.sel}>
+                          <button
+                            onClick={() => pickSelection(it.sel)}
+                            className={`flex w-full items-center justify-between px-1.5 py-1
+                                        text-[11px] ${on ? 'bg-amber-100 font-bold' : ''}`}
+                          >
+                            <span className="tabnum text-sub">{it.rest}</span>
+                            <span
+                              className={`tabnum font-semibold ${
+                                it.o >= 100 ? 'text-red-600' : ''
+                              }`}
+                            >
+                              {it.o.toFixed(1)}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* 買い目プレビュー（オッズつき） */}
       {selections.length > 0 && (

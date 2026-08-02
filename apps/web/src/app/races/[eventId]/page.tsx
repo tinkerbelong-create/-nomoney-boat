@@ -15,7 +15,9 @@ import {
   getEvent,
   getMyBetsForEvent,
   getMarketResults,
+  getFavoriteRacers,
 } from '@/lib/queries';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import { fmtTime, fmtPt, fmtSigned, laneClass, profitColor } from '@/lib/format';
 import { settleWaitingText } from '@/lib/settings';
 import { BOATRACE_BET_TYPES } from '@/core';
@@ -34,10 +36,12 @@ export default async function RaceDetailPage({
   const [balance, event] = await Promise.all([getBalance(profile.id), getEvent(eventId)]);
   if (!event) notFound();
 
-  const [myBets, results] = await Promise.all([
+  const [myBets, results, favorites] = await Promise.all([
     getMyBetsForEvent(eventId),
     getMarketResults((event.markets ?? []).map((m: any) => m.id)),
+    getFavoriteRacers(),
   ]);
+  const favSet = new Set(favorites.map((f) => f.racer_id));
 
   const serverNow = Date.now();
   const isOpen =
@@ -101,27 +105,61 @@ export default async function RaceDetailPage({
             </p>
           ) : (
             <ul>
-              {entrants.map((e: any) => (
-                <li key={e.slot_code} className="flex items-center gap-3 border-b border-line px-4 py-2.5">
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded text-sm font-bold ${laneClass(
-                      e.slot_code,
-                    )}`}
+              {entrants.map((e: any) => {
+                const m = e.meta ?? {};
+                // 旧いデータ（名前つき項目が入る前に取り込んだもの）でも
+                // それなりに表示できるよう rates からも拾う
+                const rates: string[] = Array.isArray(m.rates) ? m.rates : [];
+                const win = m.nationalWin ?? rates[0];
+                const top2 = m.nationalTop2 ?? rates[1];
+                const motor = m.motorTop2 ?? rates[6];
+
+                return (
+                  <li
+                    key={e.slot_code}
+                    className="flex items-center gap-3 border-b border-line px-4 py-2.5"
                   >
-                    {e.slot_code}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{e.name}</div>
-                    <div className="tabnum text-[11px] text-sub">
-                      {e.meta?.racerClass && <span className="mr-2">{e.meta.racerClass}</span>}
-                      {e.meta?.racerId && <span className="mr-2">#{e.meta.racerId}</span>}
-                      {Array.isArray(e.meta?.rates) && e.meta.rates.length > 0 && (
-                        <span>勝率 {e.meta.rates[0]}</span>
-                      )}
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded text-sm font-bold ${laneClass(
+                        e.slot_code,
+                      )}`}
+                    >
+                      {e.slot_code}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{e.name}</div>
+                      <div className="tabnum truncate text-[11px] text-sub">
+                        {m.racerClass && (
+                          <span className="mr-1.5 rounded bg-gray-100 px-1 font-bold">
+                            {m.racerClass}
+                          </span>
+                        )}
+                        {m.branch && <span className="mr-1.5">{m.branch}</span>}
+                        {m.age && <span className="mr-1.5">{m.age}歳</span>}
+                        {m.racerId && <span className="text-gray-400">#{m.racerId}</span>}
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
+
+                    <div className="tabnum shrink-0 text-right text-[10px] leading-tight text-sub">
+                      <div>
+                        勝率 <span className="text-sm font-bold text-ink">{win ?? '—'}</span>
+                      </div>
+                      <div>2連率 {top2 ? `${top2}%` : '—'}</div>
+                      <div>モーター {motor ? `${motor}%` : '—'}</div>
+                    </div>
+
+                    {m.racerId && (
+                      <FavoriteButton
+                        racerId={m.racerId}
+                        name={e.name}
+                        initialOn={favSet.has(m.racerId)}
+                        size="sm"
+                      />
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

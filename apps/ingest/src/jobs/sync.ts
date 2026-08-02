@@ -94,8 +94,14 @@ export async function syncSchedule(dateYmd: string, sportCode = 'boatrace') {
   return { events: drafts.length, markets: marketRows.length };
 }
 
-/** 出走表を取り込む。未取得のイベントだけを対象にして無駄なアクセスを避ける。 */
-export async function syncEntrants(dateYmd: string, sportCode = 'boatrace') {
+/**
+ * 出走表を取り込む。未取得のイベントだけを対象にして無駄なアクセスを避ける。
+ *
+ * force を立てると、すでに取り込み済みのレースも取り直す。
+ * 読み取りの不具合を直したあとに、間違ったまま入っているデータを
+ * 上書きするために使う。
+ */
+export async function syncEntrants(dateYmd: string, sportCode = 'boatrace', force = false) {
   const supabase = db();
   const adapter = getAdapter(sportCode);
 
@@ -107,8 +113,96 @@ export async function syncEntrants(dateYmd: string, sportCode = 'boatrace') {
     .eq('status', 'scheduled');
   if (error) throw error;
 
-  const targets = (events ?? []).filter((e: any) => (e.event_entrants?.length ?? 0) === 0);
+  const targets = force
+    ? (events ?? [])
+    : (events ?? []).filter((e: any) => (e.event_entrants?.length ?? 0) === 0);
   console.log(`[entrants] 対象 ${targets.length} / 全 ${events?.length ?? 0} レース`);
+  if (targets.length === 0) return 0;
+
+  // 場ごとにまとめる。レース一覧ページ1枚に12レース分の出走メンバーが
+  // 載っているので、場の数だけアクセスすれば足りる。
+  // （以前はレースごとに出走表ページを開いていて、144アクセス・30分かかっていた）
+  const byVenue = new Map<string, { id: string; raceNo: number; key: string }[]>();
+  for (const ev of targets) {
+    const parts = String(ev.external_key).split(':'); // boatrace:YYYYMMDD:jcd:rno
+    const jcd = parts[2];
+    const raceNo = Number(parts[3]);
+    if (!jcd || !Number.isFinite(raceNo)) continue;
+    if (!byVenue.has(jcd)) byVenue.set(jcd, []);
+    byVenue.get(jcd)!.push({ id: ev.id, raceNo, key: ev.external_key });
+  }
+
+  let ok = 0;
+  for (const [jcd, races] of byVenue) {
+    try {
+      const map = await (adapter as any).fetchVenueEntrants(dateYmd, jcd);
+      if (!map || map.size === 0) {
+        console.warn(`[entrants] jcd=${jcd}: 出走メンバーを取得できませんでした`);
+        continue;
+      }
+
+      for (const race of races) {
+        const list = map.get(race.raceNo);
+        if (!list || list.length === 0) continue;
+
+        const { error: e2 } = await supabase.from('event_entrants').upsert(
+          list.map((x: any) => ({
+            event_id: race.id,
+            slot_code: x.slotCode,
+            number_label: x.numberLabel,
+            name: x.name,
+            meta: x.meta,
+            sort_order: x.sortOrder,
+          })),
+          { onConflict: 'event_id,slot_code' },
+        );
+        if (e2) {
+          console.error(`[entrants] ${race.key} 保存失敗:`, e2);
+          continue;
+        }
+        ok += 1;
+      }
+      console.log(`[entrants] jcd=${jcd}: ${races.length} レース分を反映`);
+    } catch (err) {
+      console.error(`[entrants] jcd=${jcd} 失敗:`, err);
+    }
+  }
+
+  console.log(`[entrants] ${ok} レース取り込み`);
+  return ok;
+}
+
+/**
+ * 出走表の詳細（全国勝率・当地勝率・モーター2連率など）を埋める。
+ *
+ * これらはレースごとの出走表ページにしか載っていない。
+ * 全144レース分を一度に取ると30分かかってしまうので、
+ * 15分ごとのジョブで「締切が近い順に少しずつ」取る。
+ * 利用者が実際に見るのはこれから始まるレースなので、これで十分間に合う。
+ */
+export async function syncEntrantDetails(limit = 15, sportCode = 'boatrace') {
+  const supabase = db();
+  const adapter = getAdapter(sportCode);
+
+  const { data: events, error } = await supabase
+    .from('events')
+    .select('id, external_key, deadline_at, event_entrants(slot_code, meta)')
+    .eq('sport_code', sportCode)
+    .eq('status', 'scheduled')
+    .gt('deadline_at', new Date().toISOString())
+    .order('deadline_at', { ascending: true })
+    .limit(200);
+  if (error) throw error;
+
+  const targets = (events ?? [])
+    .filter((e: any) => {
+      const list = e.event_entrants ?? [];
+      if (list.length === 0) return false; // まず名前が入っていないと意味がない
+      return !list.some((x: any) => x.meta?.nationalWin);
+    })
+    .slice(0, limit);
+
+  console.log(`[details] 対象 ${targets.length} レース`);
 
   let ok = 0;
   for (const ev of targets) {
@@ -130,10 +224,11 @@ export async function syncEntrants(dateYmd: string, sportCode = 'boatrace') {
       if (e2) throw e2;
       ok += 1;
     } catch (err) {
-      console.error(`[entrants] ${ev.external_key} 失敗:`, err);
+      console.error(`[details] ${ev.external_key} 失敗:`, err);
     }
   }
-  console.log(`[entrants] ${ok} レース取り込み`);
+
+  console.log(`[details] ${ok} レース更新`);
   return ok;
 }
 

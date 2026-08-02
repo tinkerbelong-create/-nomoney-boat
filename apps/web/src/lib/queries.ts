@@ -213,3 +213,84 @@ export async function getMonthlyTrend(userId: string) {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([month, profit]) => ({ month, profit }));
 }
+
+// =====================================================================
+// お気に入り選手
+// =====================================================================
+
+export interface FavoriteRacer {
+  racer_id: string;
+  name: string;
+  created_at: string;
+}
+
+/** 上限。データベース側のトリガーと同じ値。 */
+export const FAVORITE_LIMIT = 10;
+
+export async function getFavoriteRacers(): Promise<FavoriteRacer[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('favorite_racers')
+    .select('racer_id, name, created_at')
+    .order('created_at', { ascending: true });
+  return data ?? [];
+}
+
+/**
+ * 指定したレースのうち、お気に入り選手が出ているものを
+ * イベントID → 選手名の配列 で返す。
+ */
+export async function getFavoriteEventMap(
+  eventIds: string[],
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (eventIds.length === 0) return out;
+
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('my_favorite_events', {
+    p_event_ids: eventIds,
+  });
+  if (error) return out;
+
+  for (const row of data ?? []) {
+    out.set((row as any).event_id, (row as any).racer_names ?? []);
+  }
+  return out;
+}
+
+/** 選手を名前か登録番号で探す */
+export async function searchRacers(query: string) {
+  const q = query.trim();
+  if (q.length === 0) return [];
+
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('search_racers', {
+    p_query: q,
+    p_limit: 30,
+  });
+  if (error) return [];
+  return (data ?? []) as {
+    racer_id: string;
+    name: string;
+    racer_class: string | null;
+    last_seen: string | null;
+  }[];
+}
+
+/**
+ * 1つの場の当日全レース（レース・結果一覧用）。
+ * 確定していれば着順と3連単の払戻もいっしょに返す。
+ */
+export async function getVenueRaces(dateYmd: string, venueCode: string) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('events')
+    .select(
+      `id, title, venue_code, venue_name, race_number, grade, deadline_at, status,
+       event_results(placings, decided_by),
+       markets(bet_type_code, market_results(winning_selection, payout_per_100, popularity))`,
+    )
+    .like('external_key', `boatrace:${dateYmd}:${venueCode}:%`)
+    .order('race_number', { ascending: true });
+  return data ?? [];
+}

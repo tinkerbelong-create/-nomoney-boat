@@ -37,6 +37,7 @@ export default async function MePage() {
   const links = [
     { href: '/me/stats', label: '成績の詳細', sub: '賭け式別・月次推移' },
     { href: '/me/bets', label: '投票履歴', sub: 'これまでの投票' },
+    { href: '/me/favorites', label: 'お気に入り選手', sub: '最大10人・出走レースに★' },
     { href: '/friends', label: 'フレンド', sub: '一覧・申請' },
     { href: '/about', label: 'このサイトについて', sub: '換金性について' },
   ];

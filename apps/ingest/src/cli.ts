@@ -12,7 +12,14 @@
  *   npm run ingest -- dry-run 20260801    DBに書かずに取得内容を表示（動作確認用）
  */
 
-import { syncSchedule, syncEntrants, closeExpiredMarkets, todayYmd, getAdapter } from './jobs/sync.ts';
+import {
+  syncSchedule,
+  syncEntrants,
+  syncEntrantDetails,
+  closeExpiredMarkets,
+  todayYmd,
+  getAdapter,
+} from './jobs/sync.ts';
 import { settleDueEvents, settleOldEvents } from './jobs/settle.ts';
 import { db } from './db.ts';
 
@@ -31,6 +38,18 @@ async function main() {
       for (const d of dates) await syncEntrants(d);
       break;
     }
+
+    // 取り込み済みのぶんも取り直す。読み取りの不具合を直したときに使う。
+    case 'entrants-force': {
+      const dates = arg ? [arg] : [todayYmd(0), todayYmd(1)];
+      for (const d of dates) await syncEntrants(d, 'boatrace', true);
+      break;
+    }
+
+    // 締切が近い順に、出走表の詳細（勝率など）を少しずつ埋める
+    case 'details':
+      await syncEntrantDetails(arg ? Number(arg) : 15);
+      break;
 
     case 'close':
       await closeExpiredMarkets();
@@ -64,6 +83,8 @@ async function main() {
       console.log(`使い方:
   schedule [YYYYMMDD]   開催スケジュールとマーケットを取り込む
   entrants [YYYYMMDD]   出走表を取り込む
+  entrants-force [YYYYMMDD] 取り込み済みのぶんも取り直す
+  details [件数]        締切が近い順に出走表の詳細を埋める
   close                 締切を過ぎたマーケットを閉じる
   settle                結果を取得して精算する
   settle-old            12時間以上前の取り残しを処理する
