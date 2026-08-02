@@ -35,9 +35,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
 
-      - run: npm ci
+      # package-lock.json をリポジトリに置いていないので npm ci は使えない。
+      # npm install で毎回入れ直す（1分ほど）。
+      - run: npm install --no-audit --no-fund
 
       # 当日と翌日のレース・締切時刻
       - name: schedule
