@@ -154,16 +154,14 @@ export class BoatraceAdapter implements SportAdapter {
       const regMatch = /(\d{4})\s*\/?\s*(A1|A2|B1|B2)/.exec(text);
       if (!regMatch) return;
 
-      const slotCode = detectLaneNumber($, $tb);
-      if (!slotCode) return;
-
       const name = extractRacerName($, $tb);
       const nums = text.match(/\d+\.\d{2}/g) ?? [];
 
       entrants.push({
-        slotCode,
-        numberLabel: `${slotCode}号艇`,
-        name: name || `${slotCode}号艇`,
+        // 艇番はこの時点では仮。全部読み終わってから確定させる。
+        slotCode: detectLaneNumber($, $tb) ?? '',
+        numberLabel: '',
+        name,
         meta: {
           racerId: regMatch[1],
           racerClass: regMatch[2],
@@ -171,14 +169,56 @@ export class BoatraceAdapter implements SportAdapter {
           // 並ぶことが多いが、レイアウト変更に備えて生の並びも残しておく
           rates: nums.slice(0, 8),
         },
-        sortOrder: Number(slotCode),
+        sortOrder: 0,
       });
     });
 
     if (entrants.length === 0) {
       console.warn(`[boatrace] ${externalKey}: 出走表を1件も取得できませんでした`);
+      return [];
     }
-    return entrants.sort((a, b) => a.sortOrder - b.sortOrder);
+
+    // 艇番の確定。
+    //
+    // HTMLから読んだ艇番が「6艇ぶんすべて異なる」ときだけそれを信用する。
+    // 重複や欠けがある場合は、公式サイトが必ず1号艇→6号艇の順に並べることを
+    // 利用して、出てきた順番で 1,2,3... と振り直す。
+    //
+    // 以前はここで重複した艇番のまま保存しようとして、
+    // データベースに弾かれて出走表がまったく入らなかった。
+    const detected = entrants.map((e) => e.slotCode);
+    const allValid =
+      detected.every((s) => /^[1-6]$/.test(s)) &&
+      new Set(detected).size === detected.length;
+
+    if (!allValid) {
+      console.warn(
+        `[boatrace] ${externalKey}: 艇番を読めなかったので並び順で振り直します ` +
+          `(読めた値: ${JSON.stringify(detected)})`,
+      );
+    }
+
+    const fixed = entrants.map((e, i) => {
+      const slot = allValid ? e.slotCode : String(i + 1);
+      return {
+        ...e,
+        slotCode: slot,
+        numberLabel: `${slot}号艇`,
+        name: e.name || `${slot}号艇`,
+        sortOrder: Number(slot),
+      };
+    });
+
+    // 念のため、それでも重複していたら先勝ちで落とす。
+    // 重複があるとデータベースへの書き込み全体が失敗してしまうため。
+    const seen = new Set<string>();
+    const unique = fixed.filter((e) => {
+      if (seen.has(e.slotCode)) return false;
+      seen.add(e.slotCode);
+      return true;
+    });
+
+    return unique.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   // -------------------------------------------------------------------
