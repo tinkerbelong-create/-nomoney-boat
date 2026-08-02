@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  @apply bg-[#f7f8fa] text-ink antialiased;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP',
+    'Segoe UI', sans-serif;
+}
+
+/* 下タブの分だけコンテンツを持ち上げる */
+.pb-tab {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+/* 数字は等幅で。オッズや収支が揃って読みやすくなる。 */
+.tabnum {
+  font-variant-numeric: tabular-nums;
+}

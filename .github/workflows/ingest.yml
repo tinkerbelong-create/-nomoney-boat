@@ -1,0 +1,63 @@
+# =====================================================================
+# データ取り込みワーカー（GitHub Actions 版）
+#
+# 常時起動のサーバを借りずに、無料枠だけで運用するための構成。
+#
+# 15分間隔にしているのは、プライベートリポジトリの無料枠（月2,000分）に
+# 収めるため。1回あたり1〜2分 × 1日96回 × 30日 ≒ 月2,880〜5,760分…
+# と枠を超えるので、実際にはリポジトリをパブリックにする（Actions 無制限）か、
+# 開催時間帯だけに絞ることを推奨する。下の cron のコメントを参照。
+#
+# 「締切」はデータベース側の時刻で判定しているので、この間隔とは無関係に
+# 発走時刻ちょうどで投票が締まる。遅れるのは結果とポイントの反映だけ。
+#
+# 【必要なシークレット】
+#   リポジトリの Settings > Secrets and variables > Actions で登録する
+#     SUPABASE_URL
+#     SUPABASE_SERVICE_ROLE_KEY
+# =====================================================================
+
+name: ingest
+
+on:
+  schedule:
+    # 15分ごと。締切処理と結果の精算。
+    #
+    # さらに無料枠を節約したい場合は、ボートレースが開催されている時間帯
+    # （おおむね JST 8:00〜21:30 = UTC 23:00〜12:30）に絞るとよい:
+    #   - cron: '*/15 23,0-12 * * *'
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # 手動実行用
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      INGEST_USER_AGENT: ${{ vars.INGEST_USER_AGENT }}
+      TZ: Asia/Tokyo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # 締切を過ぎたマーケットを閉じる
+      - name: close
+        run: npm run ingest -- close
+
+      # 結果を取得して精算する
+      - name: settle
+        run: npm run ingest -- settle

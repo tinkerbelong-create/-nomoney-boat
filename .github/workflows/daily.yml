@@ -1,0 +1,61 @@
+# =====================================================================
+# 1日1回まわす処理
+#   - 当日と翌日の開催スケジュール・出走表の取り込み
+#   - 取り残した古いレースの回収
+#   - 月初のポイント付与
+# =====================================================================
+
+name: daily
+
+on:
+  schedule:
+    # JST 06:00 と 12:00（cron は UTC なので -9時間）
+    - cron: '0 21 * * *'
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      INGEST_USER_AGENT: ${{ vars.INGEST_USER_AGENT }}
+      TZ: Asia/Tokyo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # 当日と翌日のレース・締切時刻
+      - name: schedule
+        run: npm run ingest -- schedule
+
+      # 出走表
+      - name: entrants
+        run: npm run ingest -- entrants
+
+      # 取り残しの回収
+      - name: settle-old
+        run: npm run ingest -- settle-old
+
+      # 月初ならポイントを配る（それ以外の日は何も起きない）
+      - name: grant
+        run: |
+          if [ "$(date +%d)" = "01" ]; then
+            npm run ingest -- grant "$(date +%Y-%m)"
+          else
+            echo "月初ではないのでスキップ"
+          fi

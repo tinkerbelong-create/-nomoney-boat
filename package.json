@@ -1,0 +1,19 @@
+{
+  "name": "nomoney-boat",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ボートレースのノーマネー予想対戦サイト",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm run test -w @nmb/core",
+    "build:core": "npm run build -w @nmb/core",
+    "ingest": "npm run start -w @nmb/ingest --",
+    "dev": "npm run dev -w @nmb/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
