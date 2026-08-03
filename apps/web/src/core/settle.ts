@@ -99,6 +99,22 @@ export async function settleEvent(
   }
 
   await supabase.from('events').update({ status: 'resolved' }).eq('id', eventId);
+
+  // このレースに関わった人の称号を判定する。
+  // 失敗しても精算はすでに終わっているので、握りつぶして先に進む。
+  try {
+    const { data: players } = await supabase
+      .from('bets')
+      .select('user_id, markets!inner(event_id)')
+      .eq('markets.event_id', eventId);
+    const ids = [...new Set((players ?? []).map((p: any) => p.user_id))];
+    for (const id of ids) {
+      await supabase.rpc('award_badges', { p_user_id: id });
+    }
+  } catch (e) {
+    console.warn('[settle] 称号の判定に失敗:', e);
+  }
+
   return total;
 }
 

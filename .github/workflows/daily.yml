@@ -56,6 +56,15 @@ jobs:
       - name: settle-old
         run: npm run ingest -- settle-old
 
+      # 月初なら前月の月間タイトルを発行する
+      - name: titles
+        run: |
+          if [ "$(date +%d)" = "01" ]; then
+            npm run ingest -- titles
+          else
+            echo "月初ではないのでスキップ"
+          fi
+
       # 月初ならポイントを配る（それ以外の日は何も起きない）
       - name: grant
         run: |

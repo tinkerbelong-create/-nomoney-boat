@@ -362,3 +362,27 @@ export async function getFeatureForEvent(eventId: string) {
     raceDate: data.race_date as string,
   };
 }
+
+// =====================================================================
+// 称号
+// =====================================================================
+
+export interface BadgeRow {
+  code: string;
+  name: string;
+  description: string;
+  category: string;
+  rarity: 'bronze' | 'silver' | 'gold' | 'crown';
+  sort_order: number;
+  season_code: string | null;
+  /** 取得日時。未取得なら null */
+  earned_at: string | null;
+}
+
+/** その人の称号を、未取得も含めて全部返す */
+export async function getBadges(userId: string): Promise<BadgeRow[]> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('user_badge_list', { p_user_id: userId });
+  if (error) return [];
+  return (data ?? []) as BadgeRow[];
+}

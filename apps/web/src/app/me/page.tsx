@@ -8,6 +8,7 @@ import {
   getMyStats,
   currentSeasonCode,
   getRaceSummary,
+  getBadges,
 } from '@/lib/queries';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
 import { summarize } from '@/core';
@@ -17,11 +18,16 @@ export const dynamic = 'force-dynamic';
 export default async function MePage() {
   const profile = await requireProfile();
 
-  const [balance, stats, races] = await Promise.all([
+  const [balance, stats, races, badges] = await Promise.all([
     getBalance(profile.id),
     getMyStats(profile.id, currentSeasonCode()),
     getRaceSummary(profile.id, currentSeasonCode()),
+    getBadges(profile.id),
   ]);
+  const earned = badges.filter((b) => b.earned_at);
+  const recent = [...earned]
+    .sort((a, b) => (b.earned_at! > a.earned_at! ? 1 : -1))
+    .slice(0, 6);
 
   const totals = stats.reduce(
     (acc, s) => ({
@@ -39,6 +45,7 @@ export default async function MePage() {
     races.race_count > 0 ? (races.race_hit_count / races.race_count) * 100 : null;
 
   const links = [
+    { href: '/me/badges', label: '称号', sub: 'コレクション' },
     { href: '/me/stats', label: '成績の詳細', sub: '賭け式別・月次推移' },
     { href: '/me/bets', label: '投票履歴', sub: 'これまでの投票' },
     { href: '/invite', label: '友達を招待', sub: 'URLとユーザーIDを送る' },
@@ -70,6 +77,42 @@ export default async function MePage() {
           <p className="mt-3 text-center text-[11px] text-sub">
             {races.race_count}レース {races.race_hit_count}的中（{totals.betCount}点）
           </p>
+        </section>
+
+        {/* 称号。取ったものが並んでいると嬉しいので、一覧より先に出す。 */}
+        <section className="border-b border-line px-4 py-4">
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-[11px] font-bold text-sub">称号</h2>
+            <Link href="/me/badges" className="text-[11px] font-semibold text-sub underline">
+              {earned.length} / {badges.length} を見る
+            </Link>
+          </div>
+
+          {recent.length === 0 ? (
+            <p className="text-xs text-sub">
+              まだありません。投票して結果が出ると自動で付きます。
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {recent.map((b) => (
+                <span
+                  key={b.code}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+                    b.rarity === 'crown'
+                      ? 'border-violet-300 bg-violet-50 text-violet-900'
+                      : b.rarity === 'gold'
+                        ? 'border-yellow-300 bg-yellow-50 text-yellow-900'
+                        : b.rarity === 'silver'
+                          ? 'border-slate-300 bg-slate-50 text-slate-800'
+                          : 'border-amber-200 bg-amber-50 text-amber-900'
+                  }`}
+                >
+                  {b.rarity === 'crown' ? '👑 ' : '★ '}
+                  {b.name}
+                </span>
+              ))}
+            </div>
+          )}
         </section>
 
         <ul>

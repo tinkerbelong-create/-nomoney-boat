@@ -77,6 +77,17 @@ async function main() {
       break;
     }
 
+    // 月間タイトルを発行する（月末の締め。前月を指定して実行）
+    case 'titles': {
+      const season = arg ?? lastSeasonCode();
+      const { data, error } = await db().rpc('award_monthly_titles', {
+        p_season_code: season,
+      });
+      if (error) throw error;
+      console.log(`[titles] ${season}: 称号 ${data} 件`);
+      break;
+    }
+
     case 'loop':
       await loop();
       break;
@@ -96,6 +107,7 @@ async function main() {
   settle                結果を取得して精算する
   settle-old            12時間以上前の取り残しを処理する
   grant [YYYY-MM]       月初のポイント付与
+  titles [YYYY-MM]      月間タイトルを発行する
   loop                  常駐して全部まわす
   dry-run [YYYYMMDD]    DBに書かずに取得内容だけ表示する`);
       process.exit(1);
@@ -190,6 +202,14 @@ async function dryRun(dateYmd: string) {
     }
     if (result.refunded.length > 0) console.log(`  返還: ${result.refunded.join(', ')}`);
   }
+}
+
+/** 先月のシーズンコード。月間タイトルは月が変わってから発行する。 */
+function lastSeasonCode(): string {
+  const jst = new Date(Date.now() + 9 * 3600 * 1000);
+  jst.setUTCDate(1);
+  jst.setUTCMonth(jst.getUTCMonth() - 1);
+  return jst.toISOString().slice(0, 7);
 }
 
 function currentSeasonCode(): string {
