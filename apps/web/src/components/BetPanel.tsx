@@ -255,7 +255,9 @@ export function BetPanel({
 
   return (
     <section className="mt-2">
-      <h2 className="bg-gray-50 px-4 py-1.5 text-[11px] font-bold text-sub">投票する</h2>
+      <h2 className="border-y border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
+        投票する
+      </h2>
 
       {/* 賭け式 */}
       <div className="flex gap-1 overflow-x-auto px-4 py-3">
@@ -264,7 +266,7 @@ export function BetPanel({
             key={bt.code}
             onClick={() => switchBetType(bt.code)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-              bt.code === betTypeCode ? 'bg-ink text-white' : 'bg-gray-100 text-sub'
+              bt.code === betTypeCode ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-sub'
             }`}
           >
             {bt.shortName}
@@ -297,7 +299,7 @@ export function BetPanel({
                   reset();
                 }}
                 className={`rounded-lg px-3 py-1 text-xs font-semibold ${
-                  mode === m.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-sub'
+                  mode === m.key ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-sub'
                 }`}
               >
                 {m.label}
@@ -567,7 +569,7 @@ export function BetPanel({
               key={s}
               onClick={() => setStake(s)}
               className={`flex-1 rounded-lg py-2 text-xs font-bold ${
-                stake === s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-sub'
+                stake === s ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-sub'
               }`}
             >
               {s.toLocaleString()}
@@ -623,8 +625,8 @@ export function BetPanel({
         <button
           onClick={submit}
           disabled={!canSubmit}
-          className="mt-2 w-full rounded-xl bg-ink py-3 text-sm font-bold text-white
-                     disabled:bg-gray-300"
+          className="mt-2 w-full rounded-xl bg-emerald-600 py-3.5 text-base font-bold text-white
+                     shadow-sm active:bg-emerald-700 disabled:bg-gray-300 disabled:shadow-none"
         >
           {pending ? '投票中…' : '投票する'}
         </button>

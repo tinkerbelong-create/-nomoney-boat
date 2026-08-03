@@ -98,7 +98,16 @@ export default async function VenuePage({
               <li key={r.id}>
                 <Link
                   href={`/races/${r.id}`}
-                  className="flex items-start gap-3 border-b border-line px-4 py-3 active:bg-gray-50"
+                  className={`flex items-start gap-3 border-b border-line border-l-4 px-4 py-3
+                              active:bg-gray-50 ${
+                                r.status === 'cancelled'
+                                  ? 'border-l-gray-300 bg-gray-50'
+                                  : open
+                                    ? 'border-l-emerald-500'
+                                    : top3.length > 0
+                                      ? 'border-l-blue-400'
+                                      : 'border-l-amber-400 bg-amber-50/40'
+                              }`}
                 >
                   <div className="w-10 shrink-0">
                     <div className="tabnum text-base font-bold">{r.race_number}R</div>
@@ -116,6 +125,7 @@ export default async function VenuePage({
 
                     {top3.length > 0 ? (
                       <div className="flex items-center gap-1">
+                        <Chip className="mr-1 bg-blue-100 text-blue-800">確定</Chip>
                         {top3.map((p, i) => (
                           <span key={p.rank} className="flex items-center gap-1">
                             {i > 0 && <span className="text-[10px] text-sub">-</span>}
@@ -135,12 +145,14 @@ export default async function VenuePage({
                         )}
                       </div>
                     ) : (
-                      <div className="text-[11px] text-sub">
-                        {r.status === 'cancelled'
-                          ? '中止（全額返還）'
-                          : open
-                            ? '投票受付中'
-                            : '結果を集計中'}
+                      <div>
+                        {r.status === 'cancelled' ? (
+                          <Chip className="bg-gray-200 text-gray-700">中止（全額返還）</Chip>
+                        ) : open ? (
+                          <Chip className="bg-emerald-100 text-emerald-800">投票受付中</Chip>
+                        ) : (
+                          <Chip className="bg-amber-100 text-amber-900">結果を集計中</Chip>
+                        )}
                       </div>
                     )}
                   </div>
@@ -177,5 +189,13 @@ export default async function VenuePage({
 
       <TabBar />
     </>
+  );
+}
+
+function Chip({ children, className }: { children: React.ReactNode; className: string }) {
+  return (
+    <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${className}`}>
+      {children}
+    </span>
   );
 }

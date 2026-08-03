@@ -9,10 +9,9 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { TabBar } from '@/components/TabBar';
 import { AutoRefresh } from '@/components/AutoRefresh';
-import { RefreshResultButton } from '@/components/RefreshResultButton';
+import { MyRaceCard } from '@/components/MyRaceCard';
 import { requireProfile, getBalance, getMyBets } from '@/lib/queries';
-import { fmtPt, fmtSigned, fmtDate, fmtTime, profitColor } from '@/lib/format';
-import { BOATRACE_BET_TYPES } from '@/core';
+import { fmtSigned, profitColor } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,94 +119,23 @@ export default async function BetsPage({
             </Link>
           </div>
         ) : (
-          [...groups.values()].map(({ ev, list }) => {
-            const total = list.reduce((s: number, b: any) => s + b.stake, 0);
-            const back = list.reduce((s: number, b: any) => s + Number(b.payout), 0);
-            const done = list.every((b: any) => b.status !== 'placed');
-            const diff = back - total;
-
-            return (
-              <section key={ev?.id ?? Math.random()} className="border-b-8 border-gray-50">
-                <Link
-                  href={ev?.id ? `/races/${ev.id}` : '/races'}
-                  className="flex items-center gap-2 bg-gray-50 px-4 py-2 active:bg-gray-100"
-                >
-                  <span className="text-sm font-bold">
-                    {ev?.venue_name} {ev?.race_number}R
-                  </span>
-                  <span className="tabnum text-[11px] text-sub">
-                    {fmtDate(ev?.deadline_at)} {fmtTime(ev?.deadline_at)}
-                  </span>
-                  <span className="ml-auto text-right">
-                    {done ? (
-                      <span className={`tabnum text-sm font-bold ${profitColor(diff)}`}>
-                        {fmtSigned(diff)}
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-sub">結果待ち</span>
-                    )}
-                  </span>
-                </Link>
-
-                {/* 締切を過ぎているのに結果待ちのままなら、その場で取りに行けるようにする */}
-                {!done &&
-                  ev?.id &&
-                  new Date(ev.deadline_at).getTime() < Date.now() && (
-                    <div className="px-4 py-2">
-                      <RefreshResultButton eventId={ev.id} />
-                    </div>
-                  )}
-
-                <ul>
-                  {list.map((b: any) => {
-                    const bt = BOATRACE_BET_TYPES.find(
-                      (x) => x.code === b.markets?.bet_type_code,
-                    );
-                    const d = b.status === 'placed' ? null : Number(b.payout) - b.stake;
-
-                    return (
-                      <li
-                        key={b.id}
-                        className={`flex items-center gap-2 border-b border-line px-4 py-2.5 ${
-                          b.status === 'won' ? 'bg-amber-50' : ''
-                        }`}
-                      >
-                        <span className="w-12 shrink-0 rounded bg-gray-100 px-1 py-0.5 text-center text-[10px] font-semibold text-sub">
-                          {bt?.shortName}
-                        </span>
-                        <span className="tabnum flex-1 text-base font-bold tracking-wide">
-                          {b.selection}
-                        </span>
-                        <span className="tabnum text-[11px] text-sub">{fmtPt(b.stake)}</span>
-
-                        <span className="w-20 shrink-0 text-right">
-                          {b.status === 'placed' && (
-                            <span className="text-[11px] text-sub">結果待ち</span>
-                          )}
-                          {b.status === 'won' && (
-                            <>
-                              <div className="tabnum text-sm font-bold text-red-600">
-                                {fmtPt(Number(b.payout))}
-                              </div>
-                              <div className={`tabnum text-[10px] ${profitColor(d!)}`}>
-                                {fmtSigned(d!)}
-                              </div>
-                            </>
-                          )}
-                          {b.status === 'lost' && (
-                            <span className="text-[11px] text-sub">外れ</span>
-                          )}
-                          {b.status === 'refunded' && (
-                            <span className="text-[11px] text-sub">返還</span>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })
+          [...groups.values()].map(({ ev, list }) => (
+            <MyRaceCard
+              key={ev?.id ?? Math.random()}
+              eventId={ev?.id}
+              venueName={ev?.venue_name ?? ''}
+              raceNumber={ev?.race_number ?? 0}
+              deadlineAt={ev?.deadline_at}
+              bets={list.map((b: any) => ({
+                id: b.id,
+                selection: b.selection,
+                stake: b.stake,
+                status: b.status,
+                payout: Number(b.payout),
+                betTypeCode: b.markets?.bet_type_code,
+              }))}
+            />
+          ))
         )}
       </main>
 
