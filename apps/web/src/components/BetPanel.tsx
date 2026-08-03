@@ -39,10 +39,8 @@ interface Props {
   serverNow: number;
   /** 公式サイトのオッズページ。取得できなかったときの逃げ道として出す。 */
   officialOddsUrl?: string;
-  /** お題レースの倍率。ふつうのレースでは undefined */
-  featureMultiplier?: number;
-  /** お題レースで、あと何pt使えるか */
-  featureRemain?: number;
+  /** お題レースのキャッシュバック。ふつうのレースでは undefined */
+  featureCashback?: { rate: number; max: number; used: number };
   /** このレースで使える大会（参加済み・開催中・対象レースのものだけ） */
   tournaments?: { id: string; name: string; points: number }[];
 }
@@ -55,8 +53,7 @@ export function BetPanel({
   lanes,
   balance,
   officialOddsUrl,
-  featureMultiplier,
-  featureRemain,
+  featureCashback,
   tournaments = [],
 }: Props) {
   /** どの財布で買うか。'' なら持ちポイント。 */
@@ -211,20 +208,30 @@ export function BetPanel({
 
   const total = selections.length * stake;
   const overBalance = total > usable;
-  // お題レースは1人あたりの上限がある
-  const overFeature = !wallet && featureRemain !== undefined && total > featureRemain;
+
+  /**
+   * お題レースで戻ってくる額。
+   * すでに投票したぶんも含めて計算し、そこから今の増分だけを出す。
+   * 上限に当たっているときに「まだ増える」と見せないため。
+   */
+  const cashback = useMemo(() => {
+    if (!featureCashback || wallet) return null;
+    const { rate, max, used } = featureCashback;
+    const back = (s: number) => Math.min(Math.floor(s * rate), max);
+    return { now: back(used), after: back(used + total), rate, max };
+  }, [featureCashback, wallet, total]);
 
   /** 選んだ買い目が的中したときの払戻の幅 */
   const payoutRange = useMemo(() => {
     const values = selections
       .map((picks) => odds[normalizeSelection(betType, picks)])
       .filter((v): v is number => typeof v === 'number')
-      .map((o) => Math.floor(estimatePayout(stake, o) * (featureMultiplier ?? 1)));
+      .map((o) => Math.floor(estimatePayout(stake, o)));
     if (values.length === 0) return null;
     return { min: Math.min(...values), max: Math.max(...values) };
   }, [selections, odds, stake, betType]);
 
-  const canSubmit = selections.length > 0 && !overBalance && !overFeature && !pending;
+  const canSubmit = selections.length > 0 && !overBalance && !pending;
 
   const submit = () => {
     setMessage(null);
@@ -273,18 +280,15 @@ export function BetPanel({
     <section className="mt-2">
       <h2
         className={`flex items-center justify-between border-y px-4 py-2 text-xs font-bold ${
-          featureMultiplier
+          featureCashback
             ? 'border-violet-200 bg-violet-50 text-violet-800'
             : 'border-emerald-200 bg-emerald-50 text-emerald-800'
         }`}
       >
         <span>投票する</span>
-        {featureMultiplier && (
+        {featureCashback && (
           <span className="tabnum font-bold">
-            払戻 ×{featureMultiplier}
-            {featureRemain !== undefined && (
-              <span className="ml-2 font-normal">あと {fmtPt(featureRemain)}</span>
-            )}
+            {Math.round(featureCashback.rate * 100)}%キャッシュバック
           </span>
         )}
       </h2>
@@ -664,9 +668,7 @@ export function BetPanel({
         {/* 的中したらいくらになるか。複数点のときは最小〜最大で示す。 */}
         {payoutRange && (
           <div className="mt-0.5 flex items-baseline justify-between text-xs">
-            <span className="text-sub">
-              的中したら{featureMultiplier ? `（×${featureMultiplier}込み）` : ''}
-            </span>
+            <span className="text-sub">的中したら</span>
             <span className="tabnum font-semibold text-red-600">
               {payoutRange.min === payoutRange.max
                 ? fmtPt(payoutRange.min)
@@ -681,10 +683,20 @@ export function BetPanel({
           </p>
         )}
 
-        {overFeature && !overBalance && (
-          <p className="mt-1 text-xs text-red-600">
-            お題レースはあと {fmtPt(featureRemain!)} まで投票できます
-          </p>
+        {/* お題レースは外れても3割戻る。投票前にそれが見えているのが大事。 */}
+        {cashback && total > 0 && (
+          <div className="mt-0.5 flex items-baseline justify-between text-xs">
+            <span className="text-sub">外れても戻る</span>
+            <span className="tabnum font-semibold text-violet-700">
+              {cashback.after > cashback.now ? (
+                <>+{fmtPt(cashback.after - cashback.now)}</>
+              ) : (
+                <span className="font-normal text-sub">
+                  上限 {fmtPt(cashback.max)} に達しています
+                </span>
+              )}
+            </span>
+          </div>
         )}
 
         {message && (

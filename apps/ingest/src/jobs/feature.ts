@@ -81,8 +81,8 @@ export async function pickDailyFeature(dateIso = todayJst(), force = false) {
     {
       race_date: dateIso,
       event_id: best.id,
-      multiplier: 2.0,
-      max_stake: 5000,
+      cashback_rate: 0.3,
+      cashback_max: 10000,
     },
     { onConflict: 'race_date' },
   );

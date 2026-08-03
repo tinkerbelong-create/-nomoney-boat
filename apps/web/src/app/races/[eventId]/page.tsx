@@ -18,6 +18,7 @@ import {
   getFavoriteRacers,
   getFeatureForEvent,
   getTournamentsForEvent,
+  calcCashback,
 } from '@/lib/queries';
 import { EntrantList } from '@/components/EntrantList';
 import { RefreshResultButton } from '@/components/RefreshResultButton';
@@ -86,12 +87,24 @@ export default async function RaceDetailPage({
                 今日のお題
               </span>
               <span className="rounded bg-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-                払戻 ×{feature.multiplier}
+                {Math.round(feature.cashbackRate * 100)}%キャッシュバック
               </span>
             </div>
             <div className="tabnum mt-1 text-[11px] text-white/90">
-              このレースだけ払戻が{feature.multiplier}倍。1人{fmtPt(feature.maxStake)}まで。
-              {featureUsed > 0 && <>（使用 {fmtPt(featureUsed)}）</>}
+              賭けた額の{Math.round(feature.cashbackRate * 100)}%が戻ります。当たっても外れても。
+              最大{fmtPt(feature.cashbackMax)}。
+              {featureUsed > 0 && (
+                <>
+                  {' '}
+                  いま {fmtPt(featureUsed)} 投票中 →{' '}
+                  <b>
+                    {fmtPt(
+                      calcCashback(featureUsed, feature.cashbackRate, feature.cashbackMax),
+                    )}
+                  </b>{' '}
+                  戻ります
+                </>
+              )}
             </div>
           </div>
         )}
@@ -289,8 +302,11 @@ export default async function RaceDetailPage({
             deadline={event.deadline_at}
             serverNow={serverNow}
             officialOddsUrl={official?.odds}
-            featureMultiplier={feature?.multiplier}
-            featureRemain={feature ? Math.max(0, feature.maxStake - featureUsed) : undefined}
+            featureCashback={
+              feature
+                ? { rate: feature.cashbackRate, max: feature.cashbackMax, used: featureUsed }
+                : undefined
+            }
             tournaments={joinable.map((t) => ({
               id: t.id,
               name: t.name,

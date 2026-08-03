@@ -331,8 +331,10 @@ export async function getRaceSummary(userId: string, seasonCode: string | null) 
 export interface DailyFeature {
   event_id: string;
   race_date: string;
-  multiplier: number;
-  max_stake: number;
+  /** 賭けた額のうち何割が戻るか（0.3 なら3割） */
+  cashback_rate: number;
+  /** 1レースで戻る上限 */
+  cashback_max: number;
   title: string;
   venue_name: string;
   venue_code: string;
@@ -352,10 +354,15 @@ export async function getDailyFeature(): Promise<DailyFeature | null> {
   if (!row) return null;
   return {
     ...row,
-    multiplier: Number(row.multiplier),
-    max_stake: Number(row.max_stake),
+    cashback_rate: Number(row.cashback_rate),
+    cashback_max: Number(row.cashback_max),
     my_stake: Number(row.my_stake ?? 0),
   } as DailyFeature;
+}
+
+/** 賭けた額から、戻ってくる額を出す。上限で頭打ちにする。 */
+export function calcCashback(stake: number, rate: number, max: number): number {
+  return Math.min(Math.floor(stake * rate), max);
 }
 
 /** そのレースがお題かどうか（レース画面用） */
@@ -363,13 +370,13 @@ export async function getFeatureForEvent(eventId: string) {
   const supabase = await supabaseServer();
   const { data } = await supabase
     .from('daily_features')
-    .select('multiplier, max_stake, race_date')
+    .select('cashback_rate, cashback_max, race_date')
     .eq('event_id', eventId)
     .maybeSingle();
   if (!data) return null;
   return {
-    multiplier: Number(data.multiplier),
-    maxStake: Number(data.max_stake),
+    cashbackRate: Number(data.cashback_rate),
+    cashbackMax: Number(data.cashback_max),
     raceDate: data.race_date as string,
   };
 }

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Countdown } from '@/components/Countdown';
 import { fmtTime, fmtPt } from '@/lib/format';
-import type { DailyFeature } from '@/lib/queries';
+import { calcCashback, type DailyFeature } from '@/lib/queries';
 
 /**
  * 今日のお題レースの帯。
@@ -19,7 +19,8 @@ export function FeatureBanner({
   const open =
     feature.status === 'scheduled' &&
     new Date(feature.deadline_at).getTime() > serverNow;
-  const remain = Math.max(0, feature.max_stake - feature.my_stake);
+  const pct = Math.round(feature.cashback_rate * 100);
+  const back = calcCashback(feature.my_stake, feature.cashback_rate, feature.cashback_max);
   const done = feature.my_stake > 0;
 
   return (
@@ -33,7 +34,7 @@ export function FeatureBanner({
           今日のお題
         </span>
         <span className="rounded bg-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
-          払戻 ×{feature.multiplier}
+          {pct}%キャッシュバック
         </span>
         {done && (
           <span className="rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">
@@ -59,19 +60,19 @@ export function FeatureBanner({
       <div className="mt-0.5 truncate text-[11px] text-white/80">{feature.title}</div>
 
       <div className="tabnum mt-1.5 text-[11px] text-white/90">
-        {!open ? (
-          feature.status === 'resolved' ? (
-            '結果が出ました。タップして確認'
-          ) : (
-            '締め切りました'
-          )
-        ) : remain > 0 ? (
+        {!open && feature.status === 'resolved' ? (
+          '結果が出ました。タップして確認'
+        ) : !open ? (
+          '締め切りました'
+        ) : done ? (
           <>
-            あと <b className="text-sm">{fmtPt(remain)}</b> まで投票できます
-            {done && <span className="ml-1 text-white/70">（使用 {fmtPt(feature.my_stake)}）</span>}
+            {fmtPt(feature.my_stake)} 投票中 → <b className="text-sm">{fmtPt(back)}</b> 戻ります
           </>
         ) : (
-          <>上限まで投票しました（{fmtPt(feature.max_stake)}）</>
+          <>
+            賭けた額の <b className="text-sm">{pct}%</b> が戻ります（当たっても外れても・最大{' '}
+            {fmtPt(feature.cashback_max)}）
+          </>
         )}
       </div>
     </Link>
