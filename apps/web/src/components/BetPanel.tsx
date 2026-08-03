@@ -43,6 +43,8 @@ interface Props {
   featureMultiplier?: number;
   /** お題レースで、あと何pt使えるか */
   featureRemain?: number;
+  /** このレースで使える大会（参加済み・開催中・対象レースのものだけ） */
+  tournaments?: { id: string; name: string; points: number }[];
 }
 
 const QUICK_STAKES = [100, 500, 1000, 5000];
@@ -55,7 +57,12 @@ export function BetPanel({
   officialOddsUrl,
   featureMultiplier,
   featureRemain,
+  tournaments = [],
 }: Props) {
+  /** どの財布で買うか。'' なら持ちポイント。 */
+  const [walletId, setWalletId] = useState('');
+  const wallet = tournaments.find((t) => t.id === walletId);
+  const usable = wallet ? wallet.points : balance;
   const available = BOATRACE_BET_TYPES.filter((bt) =>
     markets.some((m) => m.betTypeCode === bt.code),
   );
@@ -203,9 +210,9 @@ export function BetPanel({
   };
 
   const total = selections.length * stake;
-  const overBalance = total > balance;
+  const overBalance = total > usable;
   // お題レースは1人あたりの上限がある
-  const overFeature = featureRemain !== undefined && total > featureRemain;
+  const overFeature = !wallet && featureRemain !== undefined && total > featureRemain;
 
   /** 選んだ買い目が的中したときの払戻の幅 */
   const payoutRange = useMemo(() => {
@@ -226,6 +233,7 @@ export function BetPanel({
     fd.set('betTypeCode', betTypeCode);
     fd.set('stake', String(stake));
     fd.set('selections', JSON.stringify(selections));
+    if (walletId) fd.set('tournamentId', walletId);
 
     startTransition(async () => {
       const res = await placeBets(fd);
@@ -280,6 +288,39 @@ export function BetPanel({
           </span>
         )}
       </h2>
+
+      {/* どの財布で買うか */}
+      {tournaments.length > 0 && (
+        <div className="border-b border-line px-4 py-2.5">
+          <div className="mb-1.5 text-[11px] font-bold text-sub">どのポイントで買う？</div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setWalletId('')}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                walletId === '' ? 'bg-ink text-white' : 'bg-gray-100 text-sub'
+              }`}
+            >
+              持ちポイント {fmtPt(balance)}
+            </button>
+            {tournaments.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setWalletId(t.id)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                  walletId === t.id ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-900'
+                }`}
+              >
+                🏆 {t.name} {fmtPt(t.points)}
+              </button>
+            ))}
+          </div>
+          {wallet && (
+            <p className="mt-1.5 text-[10px] text-sub">
+              大会ポイントで買います。持ちポイントは減りません。
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 賭け式 */}
       <div className="flex gap-1 overflow-x-auto px-4 py-3">
@@ -636,7 +677,7 @@ export function BetPanel({
 
         {overBalance && (
           <p className="mt-1 text-xs text-red-600">
-            持ちポイントが足りません（残高 {fmtPt(balance)}）
+            {wallet ? '大会ポイント' : '持ちポイント'}が足りません（残り {fmtPt(usable)}）
           </p>
         )}
 

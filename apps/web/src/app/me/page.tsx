@@ -48,7 +48,6 @@ export default async function MePage() {
     { href: '/me/badges', label: '称号', sub: 'コレクション' },
     { href: '/me/stats', label: '成績の詳細', sub: '賭け式別・月次推移' },
     { href: '/me/bets', label: '投票履歴', sub: 'これまでの投票' },
-    { href: '/invite', label: '友達を招待', sub: 'URLとユーザーIDを送る' },
     { href: '/me/favorites', label: 'お気に入り選手', sub: '最大10人・出走レースに★' },
     { href: '/friends', label: 'フレンド', sub: '一覧・申請' },
     { href: '/timeline', label: 'みんな（全フレンド）', sub: 'フレンド全員の投票' },

@@ -17,6 +17,7 @@ import {
   getMarketResults,
   getFavoriteRacers,
   getFeatureForEvent,
+  getTournamentsForEvent,
 } from '@/lib/queries';
 import { EntrantList } from '@/components/EntrantList';
 import { RefreshResultButton } from '@/components/RefreshResultButton';
@@ -45,6 +46,7 @@ export default async function RaceDetailPage({
     getFavoriteRacers(),
     getFeatureForEvent(eventId),
   ]);
+  const joinable = isOpenLater(event) ? await getTournamentsForEvent(eventId, event.deadline_at) : [];
   // お題レースで自分がすでに使ったポイント
   const featureUsed = feature
     ? myBets.reduce((s: number, b: any) => s + (b.status === 'refunded' ? 0 : b.stake), 0)
@@ -289,6 +291,11 @@ export default async function RaceDetailPage({
             officialOddsUrl={official?.odds}
             featureMultiplier={feature?.multiplier}
             featureRemain={feature ? Math.max(0, feature.maxStake - featureUsed) : undefined}
+            tournaments={joinable.map((t) => ({
+              id: t.id,
+              name: t.name,
+              points: t.my_points,
+            }))}
           />
         )}
       </main>
@@ -296,4 +303,9 @@ export default async function RaceDetailPage({
       <TabBar />
     </>
   );
+}
+
+/** まだ締切前かどうか（大会の財布を出すかの判定用） */
+function isOpenLater(event: any): boolean {
+  return event.status === 'scheduled' && new Date(event.deadline_at).getTime() > Date.now();
 }

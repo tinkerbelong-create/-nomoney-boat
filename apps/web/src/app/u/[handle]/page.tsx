@@ -1,7 +1,7 @@
 /**
  * 人のプロフィール。
  *
- * 自分・フレンド・同じ部屋の人が見られる。
+ * 自分・フレンド・同じ大会に出ている人が見られる。
  * 称号・自慢の的中・月ごとの成績を並べて、その人の「歴史」が見えるようにしている。
  */
 
@@ -43,16 +43,16 @@ export default async function UserPage({
   const isMe = target.id === me.id;
   const earned = badges.filter((b) => b.earned_at);
 
-  // フレンドでも同じ部屋でもない相手には何も見せない
+  // フレンドでも同じ大会でもない相手には何も見せない
   if (!isMe && badges.length === 0) {
     return (
       <>
-        <Header title={target.display_name} balance={balance} back="/rooms" />
+        <Header title={target.display_name} balance={balance} back="/friends" />
         <main className="pb-tab px-6 py-16 text-center">
           <p className="text-3xl">🔒</p>
           <p className="mt-3 text-sm font-semibold">この人の成績は見られません</p>
           <p className="mt-1 text-xs leading-relaxed text-sub">
-            フレンドになるか、同じ部屋に入ると見られます。
+            フレンドになるか、同じ大会に参加すると見られます。
           </p>
           <Link
             href="/friends/search"
@@ -77,7 +77,7 @@ export default async function UserPage({
 
   return (
     <>
-      <Header title={target.display_name} balance={balance} back="/rooms" />
+      <Header title={target.display_name} balance={balance} back="/friends" />
 
       <main className="pb-tab">
         <div className="flex items-center gap-3 border-b border-line px-4 py-4">

@@ -68,3 +68,7 @@ jobs:
       # 結果を取得して精算する
       - name: settle
         run: npm run ingest -- settle
+
+      # 大会の開始・終了・精算
+      - name: tournaments
+        run: npm run ingest -- tournaments

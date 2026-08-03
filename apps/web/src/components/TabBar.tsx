@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { href: '/', label: 'ランキング', icon: '🏆' },
+  { href: '/', label: 'ランキング', icon: '📊' },
   { href: '/races', label: 'レース', icon: '🚤' },
   { href: '/me/bets', label: '舟券', icon: '🎫' },
-  { href: '/rooms', label: '部屋', icon: '🏠' },
+  { href: '/tournaments', label: '大会', icon: '🏆' },
   { href: '/me', label: 'マイ', icon: '👤' },
 ];
 

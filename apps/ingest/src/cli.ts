@@ -57,6 +57,14 @@ async function main() {
       await pickDailyFeature(arg || undefined);
       break;
 
+    // 大会の開始・終了・精算
+    case 'tournaments': {
+      const { data, error } = await db().rpc('advance_tournaments');
+      if (error) throw error;
+      console.log(`[tournaments] ${data} 人ぶん精算しました`);
+      break;
+    }
+
     case 'close':
       await closeExpiredMarkets();
       break;
@@ -85,13 +93,6 @@ async function main() {
       });
       if (error) throw error;
       console.log(`[titles] ${season}: 称号 ${data} 件`);
-
-      // 部屋ごとのタイトルも発行する
-      const { data: rd, error: re } = await db().rpc('award_room_titles', {
-        p_season_code: season,
-      });
-      if (re) console.warn('[titles] 部屋のタイトルに失敗:', re.message);
-      else console.log(`[titles] ${season}: 部屋のタイトル ${rd} 件`);
       break;
     }
 
@@ -115,6 +116,7 @@ async function main() {
   settle-old            12時間以上前の取り残しを処理する
   grant [YYYY-MM]       月初のポイント付与
   titles [YYYY-MM]      月間タイトルを発行する
+  tournaments           大会の開始・終了・精算
   loop                  常駐して全部まわす
   dry-run [YYYYMMDD]    DBに書かずに取得内容だけ表示する`);
       process.exit(1);

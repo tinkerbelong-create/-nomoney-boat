@@ -388,89 +388,6 @@ export async function getBadges(userId: string): Promise<BadgeRow[]> {
 }
 
 // =====================================================================
-// 部屋（グループ）
-// =====================================================================
-
-export interface Room {
-  id: string;
-  name: string;
-  invite_code: string;
-  member_count: number;
-  is_owner: boolean;
-  last_message: string | null;
-  last_at: string | null;
-}
-
-export async function getMyRooms(): Promise<Room[]> {
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc('my_rooms');
-  if (error) return [];
-  return (data ?? []) as Room[];
-}
-
-export async function getRoom(roomId: string): Promise<Room | null> {
-  const rooms = await getMyRooms();
-  return rooms.find((r) => r.id === roomId) ?? null;
-}
-
-export async function getRoomRanking(
-  roomId: string,
-  metric: RankingMetric,
-  seasonCode: string | null,
-) {
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc('room_ranking', {
-    p_room_id: roomId,
-    p_season_code: seasonCode,
-    p_metric: metric,
-  });
-  if (error) return [];
-  return data ?? [];
-}
-
-export async function getRoomTimeline(roomId: string, limit = 200) {
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc('room_timeline', {
-    p_room_id: roomId,
-    p_limit: limit,
-  });
-  if (error) return [];
-  return data ?? [];
-}
-
-export async function getRoomMessages(roomId: string, limit = 100) {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
-    .from('room_messages')
-    .select('id, body, created_at, user_id, profiles!inner(handle, display_name)')
-    .eq('room_id', roomId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return (data ?? []).reverse();
-}
-
-export async function getRoomMembers(roomId: string) {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
-    .from('room_members')
-    .select('user_id, role, joined_at, profiles!inner(handle, display_name)')
-    .eq('room_id', roomId)
-    .order('joined_at', { ascending: true });
-  return data ?? [];
-}
-
-/** 部屋の月間タイトル */
-export async function getRoomTitles(roomId: string) {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
-    .from('room_titles')
-    .select('season_code, kind, user_id, profiles!inner(handle, display_name)')
-    .eq('room_id', roomId)
-    .order('season_code', { ascending: false });
-  return data ?? [];
-}
-
-// =====================================================================
 // プロフィール
 // =====================================================================
 
@@ -499,4 +416,81 @@ export async function getUserMonthly(userId: string) {
   const { data, error } = await supabase.rpc('user_monthly', { p_user_id: userId });
   if (error) return [];
   return data ?? [];
+}
+
+// =====================================================================
+// 大会
+// =====================================================================
+
+export interface Tournament {
+  id: string;
+  name: string;
+  invite_code: string;
+  owner_id: string;
+  announcement: string;
+  entry_fee: number;
+  scope: 'selected' | 'all';
+  starts_at: string;
+  ends_at: string;
+  status: 'open' | 'running' | 'finished' | 'cancelled';
+  member_count: number;
+  race_count: number;
+  is_owner: boolean;
+  joined: boolean;
+  my_points: number;
+}
+
+export async function getMyTournaments(): Promise<Tournament[]> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('my_tournaments');
+  if (error) return [];
+  return (data ?? []).map((t: any) => ({
+    ...t,
+    entry_fee: Number(t.entry_fee),
+    my_points: Number(t.my_points),
+  })) as Tournament[];
+}
+
+export async function getTournament(id: string): Promise<Tournament | null> {
+  const list = await getMyTournaments();
+  return list.find((t) => t.id === id) ?? null;
+}
+
+export async function getTournamentRanking(id: string) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('tournament_ranking', { p_tournament_id: id });
+  if (error) return [];
+  return data ?? [];
+}
+
+export async function getTournamentRaces(id: string) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('tournament_race_list', { p_tournament_id: id });
+  if (error) return [];
+  return data ?? [];
+}
+
+/**
+ * このレースで使える大会。
+ * 「開催中」かつ「参加済み」かつ「対象レース」のものだけ返す。
+ */
+export async function getTournamentsForEvent(eventId: string, deadlineAt: string) {
+  const list = await getMyTournaments();
+  const running = list.filter((t) => t.joined && t.status === 'running');
+  if (running.length === 0) return [];
+
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('tournament_races')
+    .select('tournament_id')
+    .eq('event_id', eventId);
+  const selected = new Set((data ?? []).map((r: any) => r.tournament_id));
+
+  const deadline = new Date(deadlineAt).getTime();
+  return running.filter((t) =>
+    t.scope === 'selected'
+      ? selected.has(t.id)
+      : deadline >= new Date(t.starts_at).getTime() &&
+        deadline <= new Date(t.ends_at).getTime(),
+  );
 }

@@ -132,7 +132,7 @@ async function settleBetsForMarket(
 ): Promise<SettleSummary> {
   const { data: bets } = await supabase
     .from('bets')
-    .select('id, user_id, season_code, selection, stake')
+    .select('id, user_id, season_code, selection, stake, tournament_id')
     .eq('market_id', marketId)
     .eq('status', 'placed');
 
@@ -141,9 +141,15 @@ async function settleBetsForMarket(
   const betType = getBoatraceBetType(betTypeCode);
   const refundSet = new Set(refundedLanes);
 
-  const won: { id: string; user_id: string; season_code: string; payout: number }[] = [];
+  type Row = {
+    id: string;
+    user_id: string;
+    season_code: string;
+    tournament_id: string | null;
+  };
+  const won: (Row & { payout: number })[] = [];
   const lost: string[] = [];
-  const refunded: { id: string; user_id: string; season_code: string; stake: number }[] = [];
+  const refunded: (Row & { stake: number })[] = [];
 
   for (const bet of bets) {
     const lanes = parseSelection(betType, bet.selection);
@@ -155,17 +161,31 @@ async function settleBetsForMarket(
     // お題レースは倍率をかける。100pt単位に丸めず、そのまま整数にする。
     const payout = Math.floor(calcPayout(bet.selection, bet.stake, winners) * multiplier);
     if (payout > 0) {
-      won.push({ id: bet.id, user_id: bet.user_id, season_code: bet.season_code, payout });
+      won.push({
+        id: bet.id,
+        user_id: bet.user_id,
+        season_code: bet.season_code,
+        tournament_id: bet.tournament_id ?? null,
+        payout,
+      });
     } else {
       lost.push(bet.id);
     }
   }
 
   // 台帳が先。ここで失敗しても bets はまだ placed なので再実行で復旧できる。
-  if (won.length > 0) {
+  //
+  // 大会の投票は大会ポイントの台帳へ、それ以外はふだんの台帳へ入れる。
+  // 財布を分けているので、ここを間違えるとポイントが増減しない。
+  const normalWon = won.filter((w) => !w.tournament_id);
+  const tourWon = won.filter((w) => w.tournament_id);
+  const normalRef = refunded.filter((r) => !r.tournament_id);
+  const tourRef = refunded.filter((r) => r.tournament_id);
+
+  if (normalWon.length > 0) {
     await insertLedger(
       supabase,
-      won.map((w) => ({
+      normalWon.map((w) => ({
         user_id: w.user_id,
         season_code: w.season_code,
         entry_type: 'payout',
@@ -176,10 +196,10 @@ async function settleBetsForMarket(
     );
   }
 
-  if (refunded.length > 0) {
+  if (normalRef.length > 0) {
     await insertLedger(
       supabase,
-      refunded.map((r) => ({
+      normalRef.map((r) => ({
         user_id: r.user_id,
         season_code: r.season_code,
         entry_type: 'refund',
@@ -189,6 +209,41 @@ async function settleBetsForMarket(
         memo: '返還艇を含むため',
       })),
     );
+  }
+
+  if (tourWon.length > 0 || tourRef.length > 0) {
+    const rows = [
+      ...tourWon.map((w) => ({
+        tournament_id: w.tournament_id,
+        user_id: w.user_id,
+        entry_type: 'payout',
+        amount: w.payout,
+        ref_type: 'bet',
+        ref_id: w.id,
+      })),
+      ...tourRef.map((r) => ({
+        tournament_id: r.tournament_id,
+        user_id: r.user_id,
+        entry_type: 'refund',
+        amount: r.stake,
+        ref_type: 'bet',
+        ref_id: r.id,
+      })),
+    ];
+    const { error } = await supabase
+      .from('tournament_ledger')
+      .upsert(rows, {
+        onConflict: 'tournament_id,ref_type,ref_id,entry_type',
+        ignoreDuplicates: true,
+      });
+    if (error) {
+      for (const row of rows) {
+        const { error: e } = await supabase.from('tournament_ledger').insert(row);
+        if (e && e.code !== '23505') {
+          throw new Error(`大会ポイントの記帳に失敗しました: ${e.message ?? JSON.stringify(e)}`);
+        }
+      }
+    }
   }
 
   const now = new Date().toISOString();

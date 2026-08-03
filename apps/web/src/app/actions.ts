@@ -219,66 +219,72 @@ export async function removeFavoriteRacer(formData: FormData) {
 }
 
 // =====================================================================
-// 部屋
+// 大会
 // =====================================================================
 
-export async function createRoom(formData: FormData) {
+export async function createTournament(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
-  if (name.length < 1 || name.length > 30) {
-    return { ok: false as const, error: '部屋の名前は1〜30文字で入力してください' };
+  const fee = Number(formData.get('entryFee') ?? 0);
+  const days = Number(formData.get('days') ?? 1);
+  const scope = String(formData.get('scope') ?? 'selected');
+  const announcement = String(formData.get('announcement') ?? '');
+
+  if (name.length < 1 || name.length > 40) {
+    return { ok: false as const, error: '大会名は1〜40文字で入力してください' };
+  }
+  if (!Number.isInteger(fee) || fee < 100 || fee > 100000 || fee % 100 !== 0) {
+    return { ok: false as const, error: '参加費は100〜100,000ptの100pt単位です' };
+  }
+  if (![1, 7, 14].includes(days)) {
+    return { ok: false as const, error: '期間は1日・1週間・2週間から選んでください' };
   }
 
   const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc('create_room', { p_name: name });
+  const { data, error } = await supabase.rpc('create_tournament', {
+    p_name: name,
+    p_entry_fee: fee,
+    p_days: days,
+    p_scope: scope,
+    p_announcement: announcement,
+  });
   if (error) return { ok: false as const, error: error.message };
 
   const row = Array.isArray(data) ? data[0] : data;
-  revalidatePath('/rooms');
-  return { ok: true as const, roomId: row?.id as string, code: row?.invite_code as string };
+  revalidatePath('/tournaments');
+  return { ok: true as const, id: row?.id as string, code: row?.invite_code as string };
 }
 
-export async function joinRoom(formData: FormData) {
+export async function joinTournament(formData: FormData) {
   const code = String(formData.get('code') ?? '').trim();
-  if (code.length < 4) {
-    return { ok: false as const, error: '招待コードを入力してください' };
-  }
+  if (code.length < 4) return { ok: false as const, error: '招待コードを入力してください' };
 
   const supabase = await supabaseServer();
-  const { data, error } = await supabase.rpc('join_room', { p_code: code });
+  const { data, error } = await supabase.rpc('join_tournament', { p_code: code });
   if (error) return { ok: false as const, error: error.message };
 
-  revalidatePath('/rooms');
-  return { ok: true as const, roomId: data as string };
+  revalidatePath('/tournaments');
+  return { ok: true as const, id: data as string };
 }
 
-export async function leaveRoom(formData: FormData) {
-  const roomId = String(formData.get('roomId') ?? '');
+export async function setTournamentRace(formData: FormData) {
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc('leave_room', { p_room_id: roomId });
+  const { error } = await supabase.rpc('set_tournament_race', {
+    p_tournament_id: String(formData.get('tournamentId') ?? ''),
+    p_event_id: String(formData.get('eventId') ?? ''),
+    p_add: formData.get('add') === '1',
+  });
   if (error) return { ok: false as const, error: error.message };
-  revalidatePath('/rooms');
+  revalidatePath(`/tournaments/${formData.get('tournamentId')}`);
   return { ok: true as const };
 }
 
-export async function postRoomMessage(formData: FormData) {
-  const roomId = String(formData.get('roomId') ?? '');
-  const body = String(formData.get('body') ?? '').trim();
-  if (body.length === 0) return { ok: false as const, error: '' };
-  if (body.length > 500) {
-    return { ok: false as const, error: '500文字までです' };
-  }
-
+export async function setTournamentAnnouncement(formData: FormData) {
   const supabase = await supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, error: 'ログインしてください' };
-
-  const { error } = await supabase
-    .from('room_messages')
-    .insert({ room_id: roomId, user_id: user.id, body });
+  const { error } = await supabase.rpc('set_tournament_announcement', {
+    p_tournament_id: String(formData.get('tournamentId') ?? ''),
+    p_text: String(formData.get('text') ?? ''),
+  });
   if (error) return { ok: false as const, error: error.message };
-
-  revalidatePath(`/rooms/${roomId}`);
+  revalidatePath(`/tournaments/${formData.get('tournamentId')}`);
   return { ok: true as const };
 }

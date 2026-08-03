@@ -71,10 +71,10 @@ export default async function TimelinePage() {
               締切を過ぎた投票が、ここにレースごとに並びます。
             </p>
             <Link
-              href="/invite"
+              href="/friends/search"
               className="mt-5 inline-block rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-white"
             >
-              友達を招待する
+              フレンドを探す
             </Link>
           </div>
         ) : (
