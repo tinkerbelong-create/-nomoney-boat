@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { RefreshResultButton } from '@/components/RefreshResultButton';
+import { BeforeInfoPanel } from '@/components/BeforeInfoPanel';
 import { fmtTime, fmtPt, fmtSigned, laneClass, profitColor, officialLinks } from '@/lib/format';
 import { settleWaitingText } from '@/lib/settings';
 import { BOATRACE_BET_TYPES } from '@/core';
@@ -73,13 +74,13 @@ export default async function RaceDetailPage({
         <div className="border-b border-line px-4 py-3">
           <div className="text-xs text-sub">{event.title}</div>
           <div className="mt-1 flex items-baseline gap-3">
-            <span className="tabnum text-lg font-bold">{fmtTime(event.deadline_at)}</span>
+            <span className="tabnum text-2xl font-bold">{fmtTime(event.deadline_at)}</span>
             <span className="text-xs text-sub">締切</span>
             {isOpen && (
               <Countdown
                 deadline={event.deadline_at}
                 serverNow={serverNow}
-                className="!text-xs"
+                className="!text-sm !font-bold"
               />
             )}
             {event.status === 'cancelled' && (
@@ -195,6 +196,11 @@ export default async function RaceDetailPage({
             </ul>
           )}
         </section>
+
+        {/* 直前情報。結果が出る前だけ意味がある */}
+        {entrants.length > 0 && !eventResult && event.status !== 'cancelled' && (
+          <BeforeInfoPanel eventId={event.id} />
+        )}
 
         {/* 結果 */}
         {eventResult && (

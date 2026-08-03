@@ -145,11 +145,16 @@ function EmptyFriends() {
         フレンドを追加すると、ここに収支ランキングが出ます。
       </p>
       <Link
-        href="/friends/search"
+        href="/invite"
         className="mt-5 inline-block rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-white"
       >
-        フレンドを探す
+        友達を招待する
       </Link>
+      <div className="mt-3">
+        <Link href="/friends/search" className="text-xs font-semibold text-sub underline">
+          すでに登録している友達を探す
+        </Link>
+      </div>
     </div>
   );
 }

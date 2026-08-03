@@ -198,15 +198,18 @@ function VenueGrid({
             <span className="truncate text-[10px] text-sub">{c.title}</span>
           </div>
 
-          <div className="tabnum mt-2 flex items-baseline gap-2">
+          <div className="tabnum mt-2">
             {c.finished ? (
               <span className="text-xs text-sub">本日終了</span>
             ) : (
               <>
-                <span className="text-sm font-bold">{c.next.race_number}R</span>
-                <span className="text-sm font-bold text-red-600">
-                  {fmtTime(c.next.deadline_at)}
-                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-sm font-bold">{c.next.race_number}R</span>
+                  <span className="text-sm font-bold text-red-600">
+                    {fmtTime(c.next.deadline_at)}
+                  </span>
+                </div>
+                <Countdown deadline={c.next.deadline_at} serverNow={now} />
               </>
             )}
           </div>
