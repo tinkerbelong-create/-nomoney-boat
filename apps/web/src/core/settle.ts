@@ -17,6 +17,16 @@ import type { RaceResult } from './raceresult.ts';
 /** supabase-js のクライアント。型は緩くしてある（web と ingest で版が違うため）。 */
 type Client = any;
 
+/**
+ * データベースのエラーは Error ではなくただのオブジェクトで返ってくる。
+ * そのまま throw すると画面に理由が出ないので、必ず Error に包み直す。
+ */
+function asError(what: string, e: any): Error {
+  const detail = e?.message ?? e?.details ?? JSON.stringify(e);
+  const code = e?.code ? `[${e.code}] ` : '';
+  return new Error(`${what}: ${code}${detail}`);
+}
+
 export interface SettleSummary {
   won: number;
   lost: number;
@@ -31,7 +41,7 @@ export async function settleEvent(
   const total: SettleSummary = { won: 0, lost: 0, refunded: 0 };
 
   // 結果の表示用データ
-  await supabase.from('event_results').upsert({
+  const { error: erResult } = await supabase.from('event_results').upsert({
     event_id: eventId,
     placings: result.placings,
     refunded: result.refunded,
@@ -39,6 +49,7 @@ export async function settleEvent(
     decided_by: result.decidedBy ?? null,
     resolved_at: new Date().toISOString(),
   });
+  if (erResult) throw asError('結果の保存に失敗しました', erResult);
 
   const { data: markets } = await supabase
     .from('markets')
@@ -52,7 +63,7 @@ export async function settleEvent(
     const winners: WinningEntry[] = draft?.payouts ?? [];
 
     if (winners.length > 0) {
-      await supabase.from('market_results').upsert(
+      const { error } = await supabase.from('market_results').upsert(
         winners.map((w) => ({
           market_id: market.id,
           winning_selection: w.selection,
@@ -61,6 +72,7 @@ export async function settleEvent(
         })),
         { onConflict: 'market_id,winning_selection' },
       );
+      if (error) throw asError('払戻金の保存に失敗しました', error);
     }
 
     const s = await settleBetsForMarket(
@@ -124,7 +136,8 @@ async function settleBetsForMarket(
 
   // 台帳が先。ここで失敗しても bets はまだ placed なので再実行で復旧できる。
   if (won.length > 0) {
-    const { error } = await supabase.from('point_ledger').upsert(
+    await insertLedger(
+      supabase,
       won.map((w) => ({
         user_id: w.user_id,
         season_code: w.season_code,
@@ -133,13 +146,12 @@ async function settleBetsForMarket(
         ref_type: 'bet',
         ref_id: w.id,
       })),
-      { onConflict: 'ref_type,ref_id,entry_type', ignoreDuplicates: true },
     );
-    if (error) throw error;
   }
 
   if (refunded.length > 0) {
-    const { error } = await supabase.from('point_ledger').upsert(
+    await insertLedger(
+      supabase,
       refunded.map((r) => ({
         user_id: r.user_id,
         season_code: r.season_code,
@@ -149,9 +161,7 @@ async function settleBetsForMarket(
         ref_id: r.id,
         memo: '返還艇を含むため',
       })),
-      { onConflict: 'ref_type,ref_id,entry_type', ignoreDuplicates: true },
     );
-    if (error) throw error;
   }
 
   const now = new Date().toISOString();
@@ -184,4 +194,35 @@ async function settleBetsForMarket(
   }
 
   return { won: won.length, lost: lost.length, refunded: refunded.length };
+}
+
+/**
+ * 台帳への記帳。
+ *
+ * 二重計上は point_ledger の一意インデックスで防いでいる。
+ * まとめて upsert するのが速いが、この一意インデックスが
+ * 「部分インデックス」のままのデータベースでは
+ *   there is no unique or exclusion constraint matching the ON CONFLICT specification
+ * で失敗する（実際にこれで精算が全部止まっていた）。
+ *
+ * そこで、まとめ書きに失敗したら1行ずつ入れ直し、
+ * 重複エラー(23505)だけは「すでに記帳済み」とみなして読み飛ばす。
+ * こうしておけばインデックスの形に関係なく必ず記帳できる。
+ */
+async function insertLedger(supabase: Client, rows: Record<string, unknown>[]) {
+  const { error } = await supabase
+    .from('point_ledger')
+    .upsert(rows, { onConflict: 'ref_type,ref_id,entry_type', ignoreDuplicates: true });
+
+  if (!error) return;
+
+  for (const row of rows) {
+    const { error: e } = await supabase.from('point_ledger').insert(row);
+    if (e && e.code !== '23505') {
+      throw new Error(
+        `台帳への記帳に失敗しました: ${e.message ?? JSON.stringify(e)}` +
+          `（まとめ書きの失敗: ${error.message ?? JSON.stringify(error)}）`,
+      );
+    }
+  }
 }

@@ -43,6 +43,12 @@ const PAYOUT_LABEL_TO_CODE: Record<string, string> = {
   複勝: 'place',
 };
 
+/**
+ * 払戻金表に出てくる勝式の名前すべて。
+ * 「拡連複」はこのサイトでは扱わないが、行の区切りを見分けるために必要。
+ */
+const ALL_PAYOUT_LABELS = [...Object.keys(PAYOUT_LABEL_TO_CODE), '拡連複'];
+
 function cleanText(s: string): string {
   return s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -102,8 +108,14 @@ export function extractPayoutRows($: cheerio.CheerioAPI): PayoutRow[] {
       // ヘッダ行はスキップ
       if (cells.some((c) => c === '払戻金') && cells.some((c) => c === '勝式')) return;
 
-      const label = cells.find((c) => c in PAYOUT_LABEL_TO_CODE);
-      if (label) currentLabel = label;
+      // 勝式のセルは、複勝のように行をまたいで省略される（rowspan 的な表現）ので
+      // 直前の勝式を引き継ぐ。
+      //
+      // ただし「拡連複」のように扱わない勝式が来たときは、必ず引き継ぎを切る。
+      // これをしないと、拡連複の3行が直前の「2連複」の当たり目として
+      // 取り込まれてしまい、本来は外れの買い目が的中になってしまう。
+      const anyLabel = cells.find((c) => ALL_PAYOUT_LABELS.includes(c));
+      if (anyLabel) currentLabel = anyLabel in PAYOUT_LABEL_TO_CODE ? anyLabel : '';
       if (!currentLabel) return;
 
       const combo = cells.find((c) => /^[1-6]([-=][1-6]){0,2}$/.test(c));

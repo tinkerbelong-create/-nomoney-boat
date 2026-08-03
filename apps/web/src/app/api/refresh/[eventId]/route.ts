@@ -118,10 +118,18 @@ export async function POST(
     await admin.rpc('refresh_user_season_stats');
 
     return NextResponse.json({ status: 'settled', ...summary });
-  } catch (err) {
+  } catch (err: any) {
+    // 原因が分からないと直しようがないので、できるだけそのまま返す。
+    // データベースのエラーは Error ではないため、message だけ見ると空になる。
+    const message =
+      err?.message ??
+      err?.details ??
+      err?.hint ??
+      (typeof err === 'string' ? err : JSON.stringify(err));
+    console.error('[refresh] 失敗', err);
     return NextResponse.json({
       status: 'error',
-      message: err instanceof Error ? err.message : '取得に失敗しました',
+      message: `${err?.code ? `[${err.code}] ` : ''}${message}`,
     });
   }
 }
