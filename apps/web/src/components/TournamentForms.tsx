@@ -14,7 +14,12 @@ import {
   setTournamentPrizes,
 } from '@/app/actions';
 import { fmtPt } from '@/lib/format';
-import { findMoneyWord, PRIZE_MAX_LENGTH, PRIZE_RULE_TEXT } from '@/lib/prizes';
+import {
+  findMoneyWord,
+  PRIZE_MAX_LENGTH,
+  PRIZE_RULE_TEXT,
+  PRIZE_PLEDGE_LINES,
+} from '@/lib/prizes';
 
 const DAYS = [
   { v: 1, label: '1日' },
@@ -31,12 +36,14 @@ export function CreateTournamentForm({ balance }: { balance: number }) {
   const [scope, setScope] = useState<'selected' | 'all'>('selected');
   const [announcement, setAnnouncement] = useState('');
   const [prizes, setPrizes] = useState(['', '', '']);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
 
   const prizeWarnings = prizes.map((p) => (p.trim() ? findMoneyWord(p) : null));
-  const prizeBlocked = prizeWarnings.some(Boolean);
+  const hasPrize = prizes.some((p) => p.trim().length > 0);
+  const prizeBlocked = prizeWarnings.some(Boolean) || (hasPrize && !agreed);
 
   return (
     <div className="space-y-3">
@@ -132,6 +139,7 @@ export function CreateTournamentForm({ balance }: { balance: number }) {
                     const next = [...prizes];
                     next[i] = e.target.value;
                     setPrizes(next);
+                    setAgreed(false);
                   }}
                   maxLength={PRIZE_MAX_LENGTH}
                   placeholder={PRIZE_PLACEHOLDERS[i]}
@@ -149,6 +157,7 @@ export function CreateTournamentForm({ balance }: { balance: number }) {
           ))}
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-sub">{PRIZE_RULE_TEXT}</p>
+        {hasPrize && <PledgeBox checked={agreed} onChange={setAgreed} />}
       </div>
 
       <div>
@@ -183,9 +192,10 @@ export function CreateTournamentForm({ balance }: { balance: number }) {
             }
             // 景品は作ったあとに別で保存する。
             // ここで失敗しても大会は残るので、大会ページから書き直せる。
-            if (prizes.some((p) => p.trim())) {
+            if (hasPrize) {
               const pf = new FormData();
               pf.set('tournamentId', res.id);
+              pf.set('agreed', agreed ? '1' : '0');
               prizes.forEach((p, i) => pf.set(`prize${i + 1}`, p));
               await setTournamentPrizes(pf);
             }
@@ -295,6 +305,47 @@ export function AnnouncementForm({
   );
 }
 
+/**
+ * 全額自己負担の誓約。
+ *
+ * 景品を1つでも書いたら必ず出て、チェックしないと保存できない。
+ * 保存のたびに外れるので、毎回あらためて読むことになる。
+ */
+function PledgeBox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+      <div className="text-[11px] font-bold text-amber-900">主催者の誓約</div>
+      <ul className="mt-1.5 space-y-1">
+        {PRIZE_PLEDGE_LINES.map((line) => (
+          <li key={line} className="text-[11px] leading-relaxed text-amber-900">
+            ・{line}
+          </li>
+        ))}
+      </ul>
+      <label className="mt-2.5 flex cursor-pointer items-start gap-2 border-t border-amber-200 pt-2.5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+        />
+        <span className="text-xs font-bold text-amber-900">
+          上のすべてに同意します
+          <span className="mt-0.5 block text-[10px] font-normal">
+            同意した日時と内容が記録され、参加者全員に表示されます
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
 const PRIZE_LABELS = ['1位', '2位', '3位'];
 const PRIZE_PLACEHOLDERS = [
   '例：焼肉おごり',
@@ -316,6 +367,7 @@ export function PrizeForm({
   initial: [string, string, string];
 }) {
   const [prizes, setPrizes] = useState<string[]>([...initial]);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
@@ -323,7 +375,9 @@ export function PrizeForm({
 
   // 入力中の警告。書いた瞬間に気づけるようにしている。
   const warnings = prizes.map((p) => (p.trim() ? findMoneyWord(p) : null));
-  const blocked = warnings.some(Boolean);
+  const hasAny = prizes.some((p) => p.trim().length > 0);
+  // 換金できるものが混ざっている、または景品があるのに未同意なら保存させない
+  const blocked = warnings.some(Boolean) || (hasAny && !agreed);
 
   return (
     <div>
@@ -344,6 +398,7 @@ export function PrizeForm({
                   setPrizes(next);
                   setSaved(false);
                   setError(null);
+                  setAgreed(false); // 中身を変えたら同意もやり直す
                 }}
                 maxLength={PRIZE_MAX_LENGTH}
                 placeholder={PRIZE_PLACEHOLDERS[i]}
@@ -361,17 +416,21 @@ export function PrizeForm({
         ))}
       </div>
 
+      {hasAny && <PledgeBox checked={agreed} onChange={setAgreed} />}
+
       <button
         disabled={pending || blocked}
         onClick={() => {
           setError(null);
           const fd = new FormData();
           fd.set('tournamentId', tournamentId);
+          fd.set('agreed', agreed ? '1' : '0');
           prizes.forEach((p, i) => fd.set(`prize${i + 1}`, p));
           start(async () => {
             const res = await setTournamentPrizes(fd);
             if (res.ok) {
               setSaved(true);
+              setAgreed(false); // 次に直すときは、また読んでから同意してもらう
               router.refresh();
             } else setError(res.error);
           });

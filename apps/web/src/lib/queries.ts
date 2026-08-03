@@ -451,10 +451,13 @@ export interface Tournament {
   starts_at: string;
   ends_at: string;
   status: 'open' | 'running' | 'finished' | 'cancelled';
+  owner_name: string;
   /** 主催者が決めた景品。空文字ならなし。サイトは表示するだけ。 */
   prize_1: string;
   prize_2: string;
   prize_3: string;
+  /** 主催者が「全額自己負担」に同意した日時。景品がなければ null。 */
+  prizes_agreed_at: string | null;
   member_count: number;
   race_count: number;
   is_owner: boolean;
@@ -470,15 +473,37 @@ export async function getMyTournaments(): Promise<Tournament[]> {
     ...t,
     entry_fee: Number(t.entry_fee),
     my_points: Number(t.my_points),
+    owner_name: t.owner_name ?? '',
     prize_1: t.prize_1 ?? '',
     prize_2: t.prize_2 ?? '',
     prize_3: t.prize_3 ?? '',
+    prizes_agreed_at: t.prizes_agreed_at ?? null,
   })) as Tournament[];
 }
 
 export async function getTournament(id: string): Promise<Tournament | null> {
   const list = await getMyTournaments();
   return list.find((t) => t.id === id) ?? null;
+}
+
+/**
+ * 主催者がいちばん最近した「全額自己負担」の誓約。
+ * 参加者も見られる。誰が・いつ・何に同意したかの記録。
+ */
+export async function getTournamentPledge(id: string) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('tournament_pledge', {
+    p_tournament_id: id,
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  return {
+    displayName: row.display_name as string,
+    handle: row.handle as string,
+    pledgeText: row.pledge_text as string,
+    agreedAt: row.agreed_at as string,
+  };
 }
 
 export async function getTournamentRanking(id: string) {

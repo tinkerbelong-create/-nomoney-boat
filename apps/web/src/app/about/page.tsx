@@ -22,9 +22,10 @@ export default function AboutPage() {
         <section>
           <h2 className="mb-2 text-base font-bold">ポイントの仕組み</h2>
           <ul className="list-disc space-y-1 pl-5 text-sub">
-            <li>毎月1日に全員へ50,000ptが配られます</li>
-            <li>月末で締め、翌月はまた50,000ptからのスタートです</li>
-            <li>過去の月の成績はいつでも振り返れます</li>
+            <li>登録したときに50,000ptが配られます（1人1回だけ）</li>
+            <li>毎週木曜日に5,000ptが配られます</li>
+            <li>ポイントは月が変わってもリセットされません。ずっと繰り越します</li>
+            <li>成績は月ごとに集計するので、今月の勝ち負けはいつでも見られます</li>
             <li>持ちポイントは、これまでの増減の積み上げで計算しています</li>
           </ul>
         </section>
@@ -51,6 +52,33 @@ export default function AboutPage() {
             </strong>
             公式サイトの結果を定期的に取りに行く仕組みのためです。
             レースが終わってすぐポイントが動かなくても、しばらくお待ちください。
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-base font-bold">大会の景品について</h2>
+          <p className="text-sub">
+            大会の主催者は、1位から3位までの景品を決められます。この景品について、
+            守ってもらう決まりがあります。
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sub">
+            <li>
+              <strong className="text-ink">景品は主催者が全額を自分で負担します。</strong>
+              参加者からお金や物を集めて景品にすることはできません。
+            </li>
+            <li>
+              現金・ギフト券・電子マネー・暗号資産など、
+              <strong className="text-ink">換金できるものは景品にできません。</strong>
+            </li>
+            <li>参加費（ポイント）と景品はつながっていません。</li>
+            <li>
+              本サイトは景品の用意・受け渡し・その後のやりとりに一切関与しません。
+              景品をめぐるトラブルについて責任を負いません。
+            </li>
+          </ul>
+          <p className="mt-2 text-sub">
+            主催者は景品を決めるたびに、上の内容への同意を求められます。
+            同意した文面・そのときの景品・日時は記録として残り、参加者全員が見られます。
           </p>
         </section>
 

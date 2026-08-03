@@ -10,7 +10,7 @@ import {
   assertValidLanes,
   BOATRACE_LANES,
 } from '@/core';
-import { findMoneyWord, PRIZE_MAX_LENGTH } from '@/lib/prizes';
+import { findMoneyWord, PRIZE_MAX_LENGTH, PRIZE_PLEDGE_TEXT } from '@/lib/prizes';
 
 /**
  * 投票する。
@@ -306,12 +306,24 @@ export async function setTournamentPrizes(formData: FormData) {
     }
   }
 
+  // 景品を書くなら、全額自己負担の誓約に同意していないと保存できない。
+  // 同意した文面はサーバー側の定数を使う。画面から送られた文面は信用しない。
+  const agreed = formData.get('agreed') === '1';
+  if (prizes.some((p) => p) && !agreed) {
+    return {
+      ok: false as const,
+      error: '景品を決めるには、全額を自分で負担することへの同意が必要です',
+    };
+  }
+
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc('set_tournament_prizes', {
     p_tournament_id: String(formData.get('tournamentId') ?? ''),
     p_1: prizes[0],
     p_2: prizes[1],
     p_3: prizes[2],
+    p_agreed: agreed,
+    p_pledge_text: PRIZE_PLEDGE_TEXT,
   });
   if (error) return { ok: false as const, error: error.message };
   revalidatePath(`/tournaments/${formData.get('tournamentId')}`);

@@ -16,6 +16,7 @@ import {
   getTournament,
   getTournamentRanking,
   getTournamentRaces,
+  getTournamentPledge,
   getRacesForDate,
 } from '@/lib/queries';
 import { fmtPt, fmtSigned, fmtDate, fmtTime, profitColor } from '@/lib/format';
@@ -40,9 +41,10 @@ export default async function TournamentPage({
   const [balance, t] = await Promise.all([getBalance(profile.id), getTournament(id)]);
   if (!t) notFound();
 
-  const [ranking, races] = await Promise.all([
+  const [ranking, races, pledge] = await Promise.all([
     getTournamentRanking(id),
     getTournamentRaces(id),
+    getTournamentPledge(id),
   ]);
 
   // 作成者が開始前にレースを選ぶための候補
@@ -159,8 +161,25 @@ export default async function TournamentPage({
               </ul>
             )}
 
+            {/* 主催者の誓約。参加を決める人がこれを読めることに意味がある。 */}
+            {hasPrize && pledge && (
+              <div className="mx-4 my-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+                <div className="text-[11px] font-bold text-amber-900">主催者の誓約</div>
+                <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-relaxed text-amber-900">
+                  {pledge.pledgeText}
+                </p>
+                <div className="mt-2 border-t border-amber-200 pt-2 text-[11px] font-bold text-amber-900">
+                  {pledge.displayName} が同意
+                  <span className="tabnum ml-1 font-normal">
+                    （{fmtDate(pledge.agreedAt)} {fmtTime(pledge.agreedAt)}）
+                  </span>
+                </div>
+              </div>
+            )}
+
             <p className="px-4 py-2.5 text-[10px] leading-relaxed text-sub">
-              景品は主催者が用意します。サイトは表示するだけで、受け渡しには関わりません。
+              景品は主催者が全額を負担します。サイトは表示するだけで、
+              用意にも受け渡しにも関わりません。
             </p>
 
             {t.is_owner && t.status !== 'finished' && t.status !== 'cancelled' && (
