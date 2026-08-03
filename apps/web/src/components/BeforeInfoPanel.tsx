@@ -30,7 +30,13 @@ interface Info {
   weatherAt?: string;
 }
 
-export function BeforeInfoPanel({ eventId }: { eventId: string }) {
+export function BeforeInfoPanel({
+  eventId,
+  officialUrl,
+}: {
+  eventId: string;
+  officialUrl?: string;
+}) {
   const [info, setInfo] = useState<Info | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,9 +70,21 @@ export function BeforeInfoPanel({ eventId }: { eventId: string }) {
       {loading && <p className="px-4 py-3 text-[11px] text-sub">読み込み中…</p>}
 
       {!loading && !info && (
-        <p className="px-4 py-3 text-[11px] text-sub">
-          {note ?? 'まだ直前情報は出ていません（発走の15分ほど前に出ます）'}
-        </p>
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-sub">
+            {note ?? 'まだ直前情報は出ていません（発走の15分ほど前に出ます）'}
+          </p>
+          {officialUrl && (
+            <a
+              href={officialUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block rounded-full border border-line px-4 py-1.5 text-xs font-semibold"
+            >
+              公式サイトの直前情報を見る ↗
+            </a>
+          )}
+        </div>
       )}
 
       {info && (
@@ -149,6 +167,18 @@ export function BeforeInfoPanel({ eventId }: { eventId: string }) {
                 <span>波高 {info.weather.waveHeight}cm</span>
                 {info.weatherAt && <span>（{info.weatherAt}）</span>}
               </div>
+            </div>
+          )}
+          {officialUrl && (
+            <div className="border-t border-line px-4 py-2">
+              <a
+                href={officialUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-semibold text-sub underline"
+              >
+                部品交換・プロペラ・前走成績など、もっと詳しく（公式サイト）↗
+              </a>
             </div>
           )}
         </>

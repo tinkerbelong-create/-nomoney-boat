@@ -379,12 +379,18 @@ export function BetPanel({
       <section className="mt-4">
         <div className="mb-1 flex items-baseline justify-between px-4">
           <span className="text-[11px] font-bold text-sub">オッズ</span>
-          <span className="text-[10px] text-sub">
-            {oddsLoading
-              ? '読み込み中…'
-              : oddsUpdatedAt
-                ? `${oddsUpdatedAt} 時点`
-                : ''}
+          <span className="flex items-baseline gap-2 text-[10px] text-sub">
+            {oddsLoading ? '読み込み中…' : oddsUpdatedAt ? `${oddsUpdatedAt} 時点` : ''}
+            {officialOddsUrl && (
+              <a
+                href={officialOddsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+              >
+                公式で見る ↗
+              </a>
+            )}
           </span>
         </div>
 
@@ -400,14 +406,16 @@ export function BetPanel({
                 href={officialOddsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-block rounded-full border border-line px-4 py-1.5 text-xs font-semibold"
+                className="mt-2 block rounded-xl border border-ink bg-white py-2.5 text-center
+                           text-sm font-bold"
               >
                 公式サイトでオッズを見る ↗
               </a>
             )}
-            {!oddsLoading && oddsError && (
-              <p className="mt-1 text-[10px] text-gray-400">理由: {oddsError}</p>
-            )}
+            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
+              オッズを見てから、この画面に戻って投票してください。
+              {oddsError && <> （{oddsError}）</>}
+            </p>
           </div>
         ) : isSingle ? (
           <div className="grid grid-cols-3 gap-1.5 px-4">

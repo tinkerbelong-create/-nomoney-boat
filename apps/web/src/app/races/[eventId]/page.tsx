@@ -17,7 +17,7 @@ import {
   getMarketResults,
   getFavoriteRacers,
 } from '@/lib/queries';
-import { FavoriteButton } from '@/components/FavoriteButton';
+import { EntrantList } from '@/components/EntrantList';
 import { RefreshResultButton } from '@/components/RefreshResultButton';
 import { BeforeInfoPanel } from '@/components/BeforeInfoPanel';
 import { fmtTime, fmtPt, fmtSigned, laneClass, profitColor, officialLinks } from '@/lib/format';
@@ -135,71 +135,22 @@ export default async function RaceDetailPage({
               出走表はまだ公開されていません。
             </p>
           ) : (
-            <ul>
-              {entrants.map((e: any) => {
-                const m = e.meta ?? {};
-                // 旧いデータ（名前つき項目が入る前に取り込んだもの）でも
-                // それなりに表示できるよう rates からも拾う
-                const rates: string[] = Array.isArray(m.rates) ? m.rates : [];
-                const win = m.nationalWin ?? rates[0];
-                const top2 = m.nationalTop2 ?? rates[1];
-
-                return (
-                  <li
-                    key={e.slot_code}
-                    className="flex items-center gap-3 border-b border-line px-4 py-2.5"
-                  >
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded text-sm font-bold ${laneClass(
-                        e.slot_code,
-                      )}`}
-                    >
-                      {e.slot_code}
-                    </span>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">{e.name}</div>
-                      <div className="tabnum truncate text-[11px] text-sub">
-                        {m.racerClass && (
-                          <span className="mr-1.5 rounded bg-gray-100 px-1 font-bold">
-                            {m.racerClass}
-                          </span>
-                        )}
-                        {m.branch && <span className="mr-1.5">{m.branch}</span>}
-                        {m.age && <span className="mr-1.5">{m.age}歳</span>}
-                        {m.racerId && <span className="text-gray-400">#{m.racerId}</span>}
-                      </div>
-                    </div>
-
-                    <div className="shrink-0 text-right">
-                      <div className="tabnum text-base font-bold leading-tight">
-                        {win ?? '—'}
-                      </div>
-                      <div className="text-[10px] leading-tight text-sub">勝率</div>
-                      <div className="tabnum mt-1 text-sm font-semibold leading-tight">
-                        {top2 ? `${Math.round(Number(top2))}%` : '—'}
-                      </div>
-                      <div className="text-[10px] leading-tight text-sub">2連率</div>
-                    </div>
-
-                    {m.racerId && (
-                      <FavoriteButton
-                        racerId={m.racerId}
-                        name={e.name}
-                        initialOn={favSet.has(m.racerId)}
-                        size="sm"
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <EntrantList
+              eventId={event.id}
+              entrants={entrants.map((e: any) => ({
+                slot_code: e.slot_code,
+                name: e.name,
+                meta: e.meta,
+              }))}
+              favorites={[...favSet]}
+              racelistUrl={official?.racelist}
+            />
           )}
         </section>
 
         {/* 直前情報。結果が出る前だけ意味がある */}
         {entrants.length > 0 && !eventResult && event.status !== 'cancelled' && (
-          <BeforeInfoPanel eventId={event.id} />
+          <BeforeInfoPanel eventId={event.id} officialUrl={official?.beforeinfo} />
         )}
 
         {/* 結果 */}
