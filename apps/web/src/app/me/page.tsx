@@ -9,6 +9,7 @@ import {
   currentSeasonCode,
   getRaceSummary,
   getBadges,
+  daysToThursday,
 } from '@/lib/queries';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
 import { summarize } from '@/core';
@@ -62,6 +63,26 @@ export default async function MePage() {
         <div className="border-b border-line px-4 py-4">
           <div className="text-lg font-bold">{profile.display_name}</div>
           <div className="text-xs text-sub">@{profile.handle}</div>
+        </div>
+
+        {/* 毎週の配布。開く理由になるので目立たせる。 */}
+        <div className="flex items-center gap-3 border-b border-line bg-emerald-50 px-4 py-3">
+          <span className="text-xl">🎁</span>
+          <div className="flex-1 text-[11px] leading-relaxed text-emerald-900">
+            {daysToThursday() === 0 ? (
+              <>
+                <b className="text-sm">今日は木曜日</b>
+                <br />
+                5,000ptが配られています
+              </>
+            ) : (
+              <>
+                次のプレゼントは <b className="text-sm">あと{daysToThursday()}日</b>
+                <br />
+                毎週木曜に5,000pt
+              </>
+            )}
+          </div>
         </div>
 
         {/* 今月のサマリ */}

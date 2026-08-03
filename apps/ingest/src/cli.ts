@@ -77,11 +77,11 @@ async function main() {
       await settleOldEvents();
       break;
 
-    case 'grant': {
-      const season = arg ?? currentSeasonCode();
-      const { data, error } = await db().rpc('grant_season_points', { p_season_code: season });
+    // 毎週木曜日に5,000ptを配る。木曜以外の日は何も起きない。
+    case 'weekly': {
+      const { data, error } = await db().rpc('grant_weekly_points');
       if (error) throw error;
-      console.log(`[grant] ${season}: ${data} 人に付与`);
+      console.log(`[weekly] ${data} 人に付与`);
       break;
     }
 
@@ -114,7 +114,7 @@ async function main() {
   close                 締切を過ぎたマーケットを閉じる
   settle                結果を取得して精算する
   settle-old            12時間以上前の取り残しを処理する
-  grant [YYYY-MM]       月初のポイント付与
+  weekly                毎週木曜のポイント付与（木曜以外は何もしない）
   titles [YYYY-MM]      月間タイトルを発行する
   tournaments           大会の開始・終了・精算
   loop                  常駐して全部まわす

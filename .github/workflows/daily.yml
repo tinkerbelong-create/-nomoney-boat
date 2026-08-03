@@ -65,11 +65,6 @@ jobs:
             echo "月初ではないのでスキップ"
           fi
 
-      # 月初ならポイントを配る（それ以外の日は何も起きない）
-      - name: grant
-        run: |
-          if [ "$(date +%d)" = "01" ]; then
-            npm run ingest -- grant "$(date +%Y-%m)"
-          else
-            echo "月初ではないのでスキップ"
-          fi
+      # 毎週木曜日にポイントを配る（木曜以外の日は何も起きない）
+      - name: weekly
+        run: npm run ingest -- weekly

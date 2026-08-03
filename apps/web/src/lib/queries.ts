@@ -51,16 +51,27 @@ export async function requireProfile() {
   return profile;
 }
 
-/** 今シーズンの持ちポイント。台帳の積み上げで出す。 */
+/**
+ * 持ちポイント。台帳の積み上げで出す。
+ *
+ * 月でリセットしないので、入会ボーナスと毎週のぶんと勝ち負けを
+ * 全部足したものが残高になる。
+ */
 export async function getBalance(userId: string): Promise<number> {
   const supabase = await supabaseServer();
   const { data } = await supabase
     .from('current_balances')
     .select('balance')
     .eq('user_id', userId)
-    .eq('season_code', currentSeasonCode())
     .maybeSingle();
   return Number(data?.balance ?? 0);
+}
+
+/** 次の木曜日（ポイントがもらえる日）まであと何日か */
+export function daysToThursday(): number {
+  const jst = new Date(Date.now() + 9 * 3600 * 1000);
+  const dow = jst.getUTCDay(); // 0=日 … 4=木
+  return (4 - dow + 7) % 7;
 }
 
 export type RankingMetric = 'profit' | 'roi' | 'hit';
