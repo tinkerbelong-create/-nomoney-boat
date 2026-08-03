@@ -386,3 +386,117 @@ export async function getBadges(userId: string): Promise<BadgeRow[]> {
   if (error) return [];
   return (data ?? []) as BadgeRow[];
 }
+
+// =====================================================================
+// 部屋（グループ）
+// =====================================================================
+
+export interface Room {
+  id: string;
+  name: string;
+  invite_code: string;
+  member_count: number;
+  is_owner: boolean;
+  last_message: string | null;
+  last_at: string | null;
+}
+
+export async function getMyRooms(): Promise<Room[]> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('my_rooms');
+  if (error) return [];
+  return (data ?? []) as Room[];
+}
+
+export async function getRoom(roomId: string): Promise<Room | null> {
+  const rooms = await getMyRooms();
+  return rooms.find((r) => r.id === roomId) ?? null;
+}
+
+export async function getRoomRanking(
+  roomId: string,
+  metric: RankingMetric,
+  seasonCode: string | null,
+) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('room_ranking', {
+    p_room_id: roomId,
+    p_season_code: seasonCode,
+    p_metric: metric,
+  });
+  if (error) return [];
+  return data ?? [];
+}
+
+export async function getRoomTimeline(roomId: string, limit = 200) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('room_timeline', {
+    p_room_id: roomId,
+    p_limit: limit,
+  });
+  if (error) return [];
+  return data ?? [];
+}
+
+export async function getRoomMessages(roomId: string, limit = 100) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('room_messages')
+    .select('id, body, created_at, user_id, profiles!inner(handle, display_name)')
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return (data ?? []).reverse();
+}
+
+export async function getRoomMembers(roomId: string) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('room_members')
+    .select('user_id, role, joined_at, profiles!inner(handle, display_name)')
+    .eq('room_id', roomId)
+    .order('joined_at', { ascending: true });
+  return data ?? [];
+}
+
+/** 部屋の月間タイトル */
+export async function getRoomTitles(roomId: string) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('room_titles')
+    .select('season_code, kind, user_id, profiles!inner(handle, display_name)')
+    .eq('room_id', roomId)
+    .order('season_code', { ascending: false });
+  return data ?? [];
+}
+
+// =====================================================================
+// プロフィール
+// =====================================================================
+
+export async function getProfileByHandle(handle: string) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, handle, display_name, avatar_url')
+    .eq('handle', handle)
+    .maybeSingle();
+  return data;
+}
+
+export async function getRecentHits(userId: string, limit = 10) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('user_recent_hits', {
+    p_user_id: userId,
+    p_limit: limit,
+  });
+  if (error) return [];
+  return data ?? [];
+}
+
+export async function getUserMonthly(userId: string) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('user_monthly', { p_user_id: userId });
+  if (error) return [];
+  return data ?? [];
+}

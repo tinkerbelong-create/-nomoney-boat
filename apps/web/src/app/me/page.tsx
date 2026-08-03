@@ -51,6 +51,7 @@ export default async function MePage() {
     { href: '/invite', label: '友達を招待', sub: 'URLとユーザーIDを送る' },
     { href: '/me/favorites', label: 'お気に入り選手', sub: '最大10人・出走レースに★' },
     { href: '/friends', label: 'フレンド', sub: '一覧・申請' },
+    { href: '/timeline', label: 'みんな（全フレンド）', sub: 'フレンド全員の投票' },
     { href: '/about', label: 'このサイトについて', sub: '換金性について' },
   ];
 

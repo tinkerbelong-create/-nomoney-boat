@@ -85,6 +85,13 @@ async function main() {
       });
       if (error) throw error;
       console.log(`[titles] ${season}: 称号 ${data} 件`);
+
+      // 部屋ごとのタイトルも発行する
+      const { data: rd, error: re } = await db().rpc('award_room_titles', {
+        p_season_code: season,
+      });
+      if (re) console.warn('[titles] 部屋のタイトルに失敗:', re.message);
+      else console.log(`[titles] ${season}: 部屋のタイトル ${rd} 件`);
       break;
     }
 

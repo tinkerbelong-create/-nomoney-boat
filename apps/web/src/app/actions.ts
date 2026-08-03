@@ -217,3 +217,68 @@ export async function removeFavoriteRacer(formData: FormData) {
   revalidatePath('/me/favorites');
   return { ok: true as const };
 }
+
+// =====================================================================
+// 部屋
+// =====================================================================
+
+export async function createRoom(formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim();
+  if (name.length < 1 || name.length > 30) {
+    return { ok: false as const, error: '部屋の名前は1〜30文字で入力してください' };
+  }
+
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('create_room', { p_name: name });
+  if (error) return { ok: false as const, error: error.message };
+
+  const row = Array.isArray(data) ? data[0] : data;
+  revalidatePath('/rooms');
+  return { ok: true as const, roomId: row?.id as string, code: row?.invite_code as string };
+}
+
+export async function joinRoom(formData: FormData) {
+  const code = String(formData.get('code') ?? '').trim();
+  if (code.length < 4) {
+    return { ok: false as const, error: '招待コードを入力してください' };
+  }
+
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('join_room', { p_code: code });
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath('/rooms');
+  return { ok: true as const, roomId: data as string };
+}
+
+export async function leaveRoom(formData: FormData) {
+  const roomId = String(formData.get('roomId') ?? '');
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc('leave_room', { p_room_id: roomId });
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath('/rooms');
+  return { ok: true as const };
+}
+
+export async function postRoomMessage(formData: FormData) {
+  const roomId = String(formData.get('roomId') ?? '');
+  const body = String(formData.get('body') ?? '').trim();
+  if (body.length === 0) return { ok: false as const, error: '' };
+  if (body.length > 500) {
+    return { ok: false as const, error: '500文字までです' };
+  }
+
+  const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: 'ログインしてください' };
+
+  const { error } = await supabase
+    .from('room_messages')
+    .insert({ room_id: roomId, user_id: user.id, body });
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath(`/rooms/${roomId}`);
+  return { ok: true as const };
+}
