@@ -312,3 +312,53 @@ export async function getRaceSummary(userId: string, seasonCode: string | null) 
     race_hit_count: Number(row?.race_hit_count ?? 0),
   };
 }
+
+// =====================================================================
+// 今日のお題レース
+// =====================================================================
+
+export interface DailyFeature {
+  event_id: string;
+  race_date: string;
+  multiplier: number;
+  max_stake: number;
+  title: string;
+  venue_name: string;
+  venue_code: string;
+  race_number: number;
+  deadline_at: string;
+  status: string;
+  /** 自分がそのレースにすでに使ったポイント */
+  my_stake: number;
+}
+
+/** 今日のお題レース。決まっていなければ null。 */
+export async function getDailyFeature(): Promise<DailyFeature | null> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('today_feature');
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  return {
+    ...row,
+    multiplier: Number(row.multiplier),
+    max_stake: Number(row.max_stake),
+    my_stake: Number(row.my_stake ?? 0),
+  } as DailyFeature;
+}
+
+/** そのレースがお題かどうか（レース画面用） */
+export async function getFeatureForEvent(eventId: string) {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from('daily_features')
+    .select('multiplier, max_stake, race_date')
+    .eq('event_id', eventId)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    multiplier: Number(data.multiplier),
+    maxStake: Number(data.max_stake),
+    raceDate: data.race_date as string,
+  };
+}

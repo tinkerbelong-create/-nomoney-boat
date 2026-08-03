@@ -48,6 +48,10 @@ jobs:
       - name: entrants
         run: npm run ingest -- entrants
 
+      # 今日のお題レースを決める
+      - name: feature
+        run: npm run ingest -- feature
+
       # 取り残しの回収
       - name: settle-old
         run: npm run ingest -- settle-old

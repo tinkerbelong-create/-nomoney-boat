@@ -17,7 +17,9 @@ import {
   getBalance,
   getRacesForDate,
   getFavoriteEventMap,
+  getDailyFeature,
 } from '@/lib/queries';
+import { FeatureBanner } from '@/components/FeatureBanner';
 import { fmtTime } from '@/lib/format';
 import { settleDelayText } from '@/lib/settings';
 
@@ -52,7 +54,10 @@ export default async function RacesPage({
     getRacesForDate(date),
   ]);
 
-  const favMap = await getFavoriteEventMap(races.map((r: any) => r.id));
+  const [favMap, feature] = await Promise.all([
+    getFavoriteEventMap(races.map((r: any) => r.id)),
+    getDailyFeature(),
+  ]);
 
   const now = Date.now();
   const isOpen = (r: any) =>
@@ -66,6 +71,10 @@ export default async function RacesPage({
       <AutoRefresh intervalMs={30_000} />
 
       <main className="pb-tab">
+        {feature && date === ymd(0) && (
+          <FeatureBanner feature={feature} serverNow={Date.now()} />
+        )}
+
         {/* 日付 */}
         <div className="flex gap-2 px-4 pt-3">
           {[

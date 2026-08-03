@@ -21,6 +21,7 @@ import {
   getAdapter,
 } from './jobs/sync.ts';
 import { settleDueEvents, settleOldEvents } from './jobs/settle.ts';
+import { pickDailyFeature } from './jobs/feature.ts';
 import { db } from './db.ts';
 
 const [, , command, arg] = process.argv;
@@ -49,6 +50,11 @@ async function main() {
     // 締切が近い順に、出走表の詳細（勝率など）を少しずつ埋める
     case 'details':
       await syncEntrantDetails(arg ? Number(arg) : 15);
+      break;
+
+    // 今日のお題レースを決める
+    case 'feature':
+      await pickDailyFeature(arg || undefined);
       break;
 
     case 'close':
@@ -85,6 +91,7 @@ async function main() {
   entrants [YYYYMMDD]   出走表を取り込む
   entrants-force [YYYYMMDD] 取り込み済みのぶんも取り直す
   details [件数]        締切が近い順に出走表の詳細を埋める
+  feature [YYYY-MM-DD] 今日のお題レースを決める
   close                 締切を過ぎたマーケットを閉じる
   settle                結果を取得して精算する
   settle-old            12時間以上前の取り残しを処理する

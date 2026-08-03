@@ -39,6 +39,10 @@ interface Props {
   serverNow: number;
   /** 公式サイトのオッズページ。取得できなかったときの逃げ道として出す。 */
   officialOddsUrl?: string;
+  /** お題レースの倍率。ふつうのレースでは undefined */
+  featureMultiplier?: number;
+  /** お題レースで、あと何pt使えるか */
+  featureRemain?: number;
 }
 
 const QUICK_STAKES = [100, 500, 1000, 5000];
@@ -49,6 +53,8 @@ export function BetPanel({
   lanes,
   balance,
   officialOddsUrl,
+  featureMultiplier,
+  featureRemain,
 }: Props) {
   const available = BOATRACE_BET_TYPES.filter((bt) =>
     markets.some((m) => m.betTypeCode === bt.code),
@@ -198,18 +204,20 @@ export function BetPanel({
 
   const total = selections.length * stake;
   const overBalance = total > balance;
+  // お題レースは1人あたりの上限がある
+  const overFeature = featureRemain !== undefined && total > featureRemain;
 
   /** 選んだ買い目が的中したときの払戻の幅 */
   const payoutRange = useMemo(() => {
     const values = selections
       .map((picks) => odds[normalizeSelection(betType, picks)])
       .filter((v): v is number => typeof v === 'number')
-      .map((o) => estimatePayout(stake, o));
+      .map((o) => Math.floor(estimatePayout(stake, o) * (featureMultiplier ?? 1)));
     if (values.length === 0) return null;
     return { min: Math.min(...values), max: Math.max(...values) };
   }, [selections, odds, stake, betType]);
 
-  const canSubmit = selections.length > 0 && !overBalance && !pending;
+  const canSubmit = selections.length > 0 && !overBalance && !overFeature && !pending;
 
   const submit = () => {
     setMessage(null);
@@ -255,8 +263,22 @@ export function BetPanel({
 
   return (
     <section className="mt-2">
-      <h2 className="border-y border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
-        投票する
+      <h2
+        className={`flex items-center justify-between border-y px-4 py-2 text-xs font-bold ${
+          featureMultiplier
+            ? 'border-violet-200 bg-violet-50 text-violet-800'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        }`}
+      >
+        <span>投票する</span>
+        {featureMultiplier && (
+          <span className="tabnum font-bold">
+            払戻 ×{featureMultiplier}
+            {featureRemain !== undefined && (
+              <span className="ml-2 font-normal">あと {fmtPt(featureRemain)}</span>
+            )}
+          </span>
+        )}
       </h2>
 
       {/* 賭け式 */}
@@ -601,7 +623,9 @@ export function BetPanel({
         {/* 的中したらいくらになるか。複数点のときは最小〜最大で示す。 */}
         {payoutRange && (
           <div className="mt-0.5 flex items-baseline justify-between text-xs">
-            <span className="text-sub">的中したら</span>
+            <span className="text-sub">
+              的中したら{featureMultiplier ? `（×${featureMultiplier}込み）` : ''}
+            </span>
             <span className="tabnum font-semibold text-red-600">
               {payoutRange.min === payoutRange.max
                 ? fmtPt(payoutRange.min)
@@ -613,6 +637,12 @@ export function BetPanel({
         {overBalance && (
           <p className="mt-1 text-xs text-red-600">
             持ちポイントが足りません（残高 {fmtPt(balance)}）
+          </p>
+        )}
+
+        {overFeature && !overBalance && (
+          <p className="mt-1 text-xs text-red-600">
+            お題レースはあと {fmtPt(featureRemain!)} まで投票できます
           </p>
         )}
 

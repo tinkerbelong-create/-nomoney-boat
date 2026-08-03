@@ -6,7 +6,14 @@
 import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { TabBar } from '@/components/TabBar';
-import { requireProfile, getBalance, getRanking, currentSeasonCode } from '@/lib/queries';
+import {
+  requireProfile,
+  getBalance,
+  getRanking,
+  currentSeasonCode,
+  getDailyFeature,
+} from '@/lib/queries';
+import { FeatureBanner } from '@/components/FeatureBanner';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
 
 const METRICS = [
@@ -29,9 +36,10 @@ export default async function HomePage({
 
   const profile = await requireProfile();
 
-  const [balance, ranking] = await Promise.all([
+  const [balance, ranking, feature] = await Promise.all([
     getBalance(profile.id),
     getRanking(metric, lifetime ? null : currentSeasonCode()),
+    getDailyFeature(),
   ]);
 
   const qs = (m: string, p: string) => `/?m=${m}${p === 'all' ? '&p=all' : ''}`;
@@ -41,6 +49,8 @@ export default async function HomePage({
       <Header title="ランキング" balance={balance} />
 
       <main className="pb-tab">
+        {feature && <FeatureBanner feature={feature} serverNow={Date.now()} />}
+
         {/* 期間 */}
         <div className="flex gap-2 px-4 pt-4">
           {[

@@ -40,6 +40,14 @@ export async function settleEvent(
 ): Promise<SettleSummary> {
   const total: SettleSummary = { won: 0, lost: 0, refunded: 0 };
 
+  // お題レースなら払戻に倍率をかける（通常は1倍）
+  const { data: feature } = await supabase
+    .from('daily_features')
+    .select('multiplier')
+    .eq('event_id', eventId)
+    .maybeSingle();
+  const multiplier = Number(feature?.multiplier ?? 1);
+
   // 結果の表示用データ
   const { error: erResult } = await supabase.from('event_results').upsert({
     event_id: eventId,
@@ -81,6 +89,7 @@ export async function settleEvent(
       market.bet_type_code,
       winners,
       result.refunded,
+      multiplier,
     );
     total.won += s.won;
     total.lost += s.lost;
@@ -103,6 +112,7 @@ async function settleBetsForMarket(
   betTypeCode: string,
   winners: WinningEntry[],
   refundedLanes: string[],
+  multiplier = 1,
 ): Promise<SettleSummary> {
   const { data: bets } = await supabase
     .from('bets')
@@ -126,7 +136,8 @@ async function settleBetsForMarket(
       continue;
     }
 
-    const payout = calcPayout(bet.selection, bet.stake, winners);
+    // お題レースは倍率をかける。100pt単位に丸めず、そのまま整数にする。
+    const payout = Math.floor(calcPayout(bet.selection, bet.stake, winners) * multiplier);
     if (payout > 0) {
       won.push({ id: bet.id, user_id: bet.user_id, season_code: bet.season_code, payout });
     } else {

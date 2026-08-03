@@ -16,6 +16,7 @@ import {
   getMyBetsForEvent,
   getMarketResults,
   getFavoriteRacers,
+  getFeatureForEvent,
 } from '@/lib/queries';
 import { EntrantList } from '@/components/EntrantList';
 import { RefreshResultButton } from '@/components/RefreshResultButton';
@@ -38,11 +39,16 @@ export default async function RaceDetailPage({
   const [balance, event] = await Promise.all([getBalance(profile.id), getEvent(eventId)]);
   if (!event) notFound();
 
-  const [myBets, results, favorites] = await Promise.all([
+  const [myBets, results, favorites, feature] = await Promise.all([
     getMyBetsForEvent(eventId),
     getMarketResults((event.markets ?? []).map((m: any) => m.id)),
     getFavoriteRacers(),
+    getFeatureForEvent(eventId),
   ]);
+  // お題レースで自分がすでに使ったポイント
+  const featureUsed = feature
+    ? myBets.reduce((s: number, b: any) => s + (b.status === 'refunded' ? 0 : b.stake), 0)
+    : 0;
   const favSet = new Set(favorites.map((f) => f.racer_id));
 
   const serverNow = Date.now();
@@ -70,6 +76,24 @@ export default async function RaceDetailPage({
       )}
 
       <main className="pb-tab">
+        {/* お題レースの帯 */}
+        {feature && (
+          <div className="bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2.5 text-white">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">
+                今日のお題
+              </span>
+              <span className="rounded bg-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                払戻 ×{feature.multiplier}
+              </span>
+            </div>
+            <div className="tabnum mt-1 text-[11px] text-white/90">
+              このレースだけ払戻が{feature.multiplier}倍。1人{fmtPt(feature.maxStake)}まで。
+              {featureUsed > 0 && <>（使用 {fmtPt(featureUsed)}）</>}
+            </div>
+          </div>
+        )}
+
         {/* レース概要 */}
         <div className="border-b border-line px-4 py-3">
           <div className="text-xs text-sub">{event.title}</div>
@@ -263,6 +287,8 @@ export default async function RaceDetailPage({
             deadline={event.deadline_at}
             serverNow={serverNow}
             officialOddsUrl={official?.odds}
+            featureMultiplier={feature?.multiplier}
+            featureRemain={feature ? Math.max(0, feature.maxStake - featureUsed) : undefined}
           />
         )}
       </main>
