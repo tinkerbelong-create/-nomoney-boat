@@ -73,9 +73,12 @@ export async function GET(
     .eq('bet_type_code', betType)
     .maybeSingle();
 
+  const debug = new URL(request.url).searchParams.get('debug') === '1';
   const closed = new Date(event.deadline_at).getTime() <= Date.now();
   const fresh =
-    cached && (closed || Date.now() - new Date(cached.fetched_at).getTime() < TTL_MS);
+    !debug &&
+    cached &&
+    (closed || Date.now() - new Date(cached.fetched_at).getTime() < TTL_MS);
 
   if (fresh) {
     return NextResponse.json({
@@ -104,6 +107,14 @@ export async function GET(
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const html = await res.text();
+
+    // ?debug=1 を付けると、読み取りのどこで失敗しているかを返す。
+    // 「ページは取れているのに解釈できない」のか「そもそも取れていない」のかを
+    // 手元で確かめられないと直しようがないため。
+    if (new URL(request.url).searchParams.get('debug') === '1') {
+      return NextResponse.json(diagnose(html, betType, url));
+    }
+
     const { odds, updatedAt } = parseOddsPage(html, betType);
 
     // 何も取れなかったときは、原因の手がかりを返す。
@@ -146,6 +157,46 @@ export async function GET(
       error: err instanceof Error ? err.message : '取得に失敗しました',
     });
   }
+}
+
+/**
+ * 読み取りの様子を人が読める形で返す（?debug=1 のとき）。
+ * 直った後も残しておく。壊れたときにまた同じ調べ方ができる。
+ */
+function diagnose(html: string, betType: string, url: string) {
+  const $ = cheerio.load(html);
+  const heading = HEADINGS[betType];
+
+  const tables = $('table')
+    .map((_, t) => {
+      const rows = $(t).find('tr').length;
+      const first = $(t)
+        .find('tr')
+        .eq(1)
+        .find('td, th')
+        .map((__, c) => $(c).text().replace(/\s+/g, ' ').trim())
+        .get();
+      return { rows, sample: first.slice(0, 20) };
+    })
+    .get();
+
+  const rows = collectRows($, heading);
+  const parsed = parseOddsPage(html, betType);
+
+  return {
+    url,
+    htmlLength: html.length,
+    betType,
+    heading,
+    headingFoundInHtml: heading ? html.includes(heading) : null,
+    tableCount: tables.length,
+    tables: tables.slice(0, 8),
+    pickedRowCount: rows.length,
+    pickedFirstRows: rows.slice(0, 4),
+    parsedCount: Object.keys(parsed.odds).length,
+    parsedSample: Object.entries(parsed.odds).slice(0, 5),
+    updatedAt: parsed.updatedAt,
+  };
 }
 
 /** ページ全体からオッズ表を見つけて解析する */
