@@ -71,40 +71,50 @@ export function BetPanel({
   const [oddsUpdatedAt, setOddsUpdatedAt] = useState<string | null>(null);
   const [oddsLoading, setOddsLoading] = useState(false);
   const [oddsError, setOddsError] = useState<string | null>(null);
+  /** 最後に取りに行った時刻。「いつの数字か」を出すため。 */
+  const [oddsCheckedAt, setOddsCheckedAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  /**
+   * オッズを取りに行く。
+   *
+   * オッズは締切間際まで動き続けるが、常時取りに行くと公式サイトの負担になる。
+   * ふだんは開いたときと2分おきに更新し、それ以外は「更新」ボタンで取り直す。
+   */
+  const loadOdds = (force = false) => {
     setOddsLoading(true);
-    setOdds({});
     setOddsError(null);
 
-    fetch(`/api/odds/${eventId}?bt=${betTypeCode}`)
+    return fetch(`/api/odds/${eventId}?bt=${betTypeCode}${force ? '&fresh=1' : ''}`)
       .then((r) => r.json())
       .then((d) => {
-        if (cancelled) return;
         setOdds(d.odds ?? {});
         setOddsUpdatedAt(d.updatedAt ?? null);
         setOddsError(d.error ?? d.detail ?? null);
+        setOddsCheckedAt(new Date());
       })
-      .catch((e) => !cancelled && setOddsError(String(e)))
-      .finally(() => !cancelled && setOddsLoading(false));
+      .catch((e) => setOddsError(String(e)))
+      .finally(() => setOddsLoading(false));
+  };
 
-    // 締切前は定期的に取り直す
-    const id = setInterval(() => {
-      fetch(`/api/odds/${eventId}?bt=${betTypeCode}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (cancelled) return;
-          setOdds(d.odds ?? {});
-          setOddsUpdatedAt(d.updatedAt ?? null);
-        })
-        .catch(() => {});
-    }, 60_000);
+  useEffect(() => {
+    let cancelled = false;
+    setOdds({});
+
+    const run = (force: boolean) => {
+      if (cancelled) return;
+      void loadOdds(force);
+    };
+
+    run(false);
+
+    // 締切前はときどき取り直す
+    const id = setInterval(() => run(true), 120_000);
 
     return () => {
       cancelled = true;
       clearInterval(id);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, betTypeCode]);
 
   const betType = getBoatraceBetType(betTypeCode);
@@ -377,18 +387,38 @@ export function BetPanel({
       {/* オッズ表。選ぶ前から見られるようにしている。
           タップするとその買い目がそのまま選択される。 */}
       <section className="mt-4">
-        <div className="mb-1 flex items-baseline justify-between px-4">
-          <span className="text-[11px] font-bold text-sub">オッズ</span>
-          <span className="flex items-baseline gap-2 text-[10px] text-sub">
-            {oddsLoading ? '読み込み中…' : oddsUpdatedAt ? `${oddsUpdatedAt} 時点` : ''}
+        <div className="mb-1.5 flex items-center justify-between gap-2 px-4">
+          <span className="text-[11px] font-bold text-sub">
+            オッズ
+            <span className="ml-2 font-normal">
+              {oddsLoading
+                ? '取得中…'
+                : oddsUpdatedAt
+                  ? `公式 ${oddsUpdatedAt} 時点`
+                  : oddsCheckedAt
+                    ? `${fmtClock(oddsCheckedAt)} 取得`
+                    : ''}
+            </span>
+          </span>
+
+          <span className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => loadOdds(true)}
+              disabled={oddsLoading}
+              className="rounded-full border border-line px-3 py-1 text-[11px] font-semibold
+                         active:bg-gray-50 disabled:opacity-40"
+            >
+              {oddsLoading ? '更新中…' : '↻ 更新'}
+            </button>
             {officialOddsUrl && (
               <a
                 href={officialOddsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold underline"
+                className="text-[10px] font-semibold text-sub underline"
               >
-                公式で見る ↗
+                公式 ↗
               </a>
             )}
           </span>
@@ -647,4 +677,9 @@ function LaneRow({
       })}
     </div>
   );
+}
+
+/** 「13:45 取得」のような表示用 */
+function fmtClock(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }

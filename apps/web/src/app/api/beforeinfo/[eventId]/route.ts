@@ -23,10 +23,12 @@ const USER_AGENT =
   'NoMoneyBoat/0.1 (hobby fan site; +https://nomoney-boat-web.vercel.app/about)';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ eventId: string }> },
 ) {
   const { eventId } = await params;
+  // 「更新」ボタンから来たときはキャッシュを飛ばす
+  const forceFresh = new URL(request.url).searchParams.get('fresh') === '1';
 
   const supabase = await supabaseServer();
   const {
@@ -45,7 +47,8 @@ export async function GET(
   const closed = new Date(event.deadline_at).getTime() <= Date.now();
   if (
     cached?.fetchedAt &&
-    (closed || Date.now() - new Date(cached.fetchedAt).getTime() < TTL_MS)
+    (closed ||
+      (!forceFresh && Date.now() - new Date(cached.fetchedAt).getTime() < TTL_MS))
   ) {
     return NextResponse.json({ info: cached.info, cached: true });
   }

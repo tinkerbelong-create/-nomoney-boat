@@ -40,21 +40,29 @@ export function BeforeInfoPanel({
   const [info, setInfo] = useState<Info | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/beforeinfo/${eventId}`)
+  /**
+   * 直前情報を取りに行く。
+   * 展示タイムやスタート展示は締切の15分ほど前に順に出てくるので、
+   * 「まだ出ていない」ときに押し直せるよう更新ボタンを用意している。
+   */
+  const load = (force = false) => {
+    setLoading(true);
+    return fetch(`/api/beforeinfo/${eventId}${force ? '?fresh=1' : ''}`)
       .then((r) => r.json())
       .then((d) => {
-        if (cancelled) return;
         setInfo(d.info ?? null);
         setNote(d.detail ?? d.error ?? null);
+        setCheckedAt(new Date());
       })
-      .catch((e) => !cancelled && setNote(String(e)))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+      .catch((e) => setNote(String(e)))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   // 展示タイムの速い順に順位を付ける（1番速い艇を目立たせる）
@@ -65,7 +73,23 @@ export function BeforeInfoPanel({
 
   return (
     <section>
-      <h2 className="bg-gray-50 px-4 py-1.5 text-[11px] font-bold text-sub">直前情報</h2>
+      <div className="flex items-center justify-between gap-2 bg-gray-50 px-4 py-1.5">
+        <h2 className="text-[11px] font-bold text-sub">
+          直前情報
+          <span className="ml-2 font-normal">
+            {loading ? '取得中…' : checkedAt ? `${fmtClock(checkedAt)} 取得` : ''}
+          </span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => load(true)}
+          disabled={loading}
+          className="shrink-0 rounded-full border border-line bg-white px-3 py-1
+                     text-[11px] font-semibold active:bg-gray-50 disabled:opacity-40"
+        >
+          {loading ? '更新中…' : '↻ 更新'}
+        </button>
+      </div>
 
       {loading && <p className="px-4 py-3 text-[11px] text-sub">読み込み中…</p>}
 
@@ -185,4 +209,9 @@ export function BeforeInfoPanel({
       )}
     </section>
   );
+}
+
+/** 「13:45 取得」のような表示用 */
+function fmtClock(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
