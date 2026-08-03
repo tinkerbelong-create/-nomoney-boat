@@ -348,7 +348,8 @@ function RaceRow({
     <li>
       <Link
         href={`/races/${race.id}`}
-        className="flex items-center gap-3 border-b border-line px-4 py-3 active:bg-gray-50"
+        className={`flex items-center gap-3 border-b border-line px-4 py-3 active:bg-gray-50
+                    ${open ? 'border-l-4 border-l-emerald-500' : 'border-l-4 border-l-transparent'}`}
       >
         <div className="w-14 shrink-0">
           <div className="flex items-center gap-0.5">
@@ -375,17 +376,34 @@ function RaceRow({
 
         <div className="shrink-0 text-right">
           <div className="tabnum text-sm font-bold">{fmtTime(race.deadline_at)}</div>
-          {race.status === 'cancelled' ? (
-            <div className="text-[11px] font-semibold text-sub">中止</div>
-          ) : open ? (
+          {open ? (
             <Countdown deadline={race.deadline_at} serverNow={serverNow} />
           ) : (
-            <div className="text-[11px] text-sub">
-              {race.status === 'resolved' ? '結果あり' : '締切'}
+            <div className="mt-0.5">
+              <RaceStatus status={race.status} />
             </div>
           )}
         </div>
       </Link>
     </li>
+  );
+}
+
+/** レースの状態を色つきの札で示す */
+function RaceStatus({ status }: { status: string }) {
+  if (status === 'cancelled') {
+    return <Chip className="bg-gray-200 text-gray-700">中止</Chip>;
+  }
+  if (status === 'resolved') {
+    return <Chip className="bg-blue-100 text-blue-800">確定</Chip>;
+  }
+  return <Chip className="bg-amber-100 text-amber-900">結果待ち</Chip>;
+}
+
+function Chip({ children, className }: { children: React.ReactNode; className: string }) {
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${className}`}>
+      {children}
+    </span>
   );
 }

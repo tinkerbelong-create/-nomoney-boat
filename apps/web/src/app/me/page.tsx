@@ -7,6 +7,7 @@ import {
   getBalance,
   getMyStats,
   currentSeasonCode,
+  getRaceSummary,
 } from '@/lib/queries';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
 import { summarize } from '@/core';
@@ -16,9 +17,10 @@ export const dynamic = 'force-dynamic';
 export default async function MePage() {
   const profile = await requireProfile();
 
-  const [balance, stats] = await Promise.all([
+  const [balance, stats, races] = await Promise.all([
     getBalance(profile.id),
     getMyStats(profile.id, currentSeasonCode()),
+    getRaceSummary(profile.id, currentSeasonCode()),
   ]);
 
   const totals = stats.reduce(
@@ -32,7 +34,9 @@ export default async function MePage() {
   );
   const profit = totals.totalPayout - totals.totalStake;
   const roi = totals.totalStake > 0 ? (totals.totalPayout / totals.totalStake) * 100 : null;
-  const hit = totals.betCount > 0 ? (totals.hitCount / totals.betCount) * 100 : null;
+  // 的中率は「レース単位」。3連単を20点買って1点当たれば的中1レース。
+  const hit =
+    races.race_count > 0 ? (races.race_hit_count / races.race_count) * 100 : null;
 
   const links = [
     { href: '/me/stats', label: '成績の詳細', sub: '賭け式別・月次推移' },
@@ -64,7 +68,7 @@ export default async function MePage() {
             <Stat label="的中率" value={fmtPct(hit)} />
           </div>
           <p className="mt-3 text-center text-[11px] text-sub">
-            {totals.betCount}戦 {totals.hitCount}的中
+            {races.race_count}レース {races.race_hit_count}的中（{totals.betCount}点）
           </p>
         </section>
 

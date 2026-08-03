@@ -1,7 +1,13 @@
 import { notFound } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { supabaseServer } from '@/lib/supabase';
-import { requireProfile, getBalance, getMyStats, currentSeasonCode } from '@/lib/queries';
+import {
+  requireProfile,
+  getBalance,
+  getMyStats,
+  currentSeasonCode,
+  getRaceSummary,
+} from '@/lib/queries';
 import { fmtSigned, fmtPct, profitColor } from '@/lib/format';
 import { BOATRACE_BET_TYPES } from '@/core';
 
@@ -25,9 +31,10 @@ export default async function UserPage({
 
   if (!target) notFound();
 
-  const [balance, stats] = await Promise.all([
+  const [balance, stats, races] = await Promise.all([
     getBalance(me.id),
     getMyStats(target.id, currentSeasonCode()),
+    getRaceSummary(target.id, currentSeasonCode()),
   ]);
 
   const totals = stats.reduce(
@@ -69,12 +76,16 @@ export default async function UserPage({
             <div className="rounded-xl bg-gray-50 py-3">
               <div className="text-[10px] text-sub">的中率</div>
               <div className="tabnum mt-0.5 text-base font-bold">
-                {fmtPct(totals.bet > 0 ? (totals.hit / totals.bet) * 100 : null)}
+                {fmtPct(
+                  races.race_count > 0
+                    ? (races.race_hit_count / races.race_count) * 100
+                    : null,
+                )}
               </div>
             </div>
           </div>
           <p className="mt-3 text-center text-[11px] text-sub">
-            {totals.bet}戦 {totals.hit}的中
+            {races.race_count}レース {races.race_hit_count}的中（{totals.bet}点）
           </p>
         </section>
 

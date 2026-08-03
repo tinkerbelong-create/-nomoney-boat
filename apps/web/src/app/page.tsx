@@ -97,7 +97,8 @@ export default async function HomePage({
                     {r.is_me && <span className="ml-1 text-[10px] text-amber-700">あなた</span>}
                   </div>
                   <div className="text-[11px] text-sub">
-                    {r.bet_count}戦 {r.hit_count}的中
+                    {r.race_count ?? 0}レース {r.race_hit_count ?? 0}的中
+                    <span className="ml-1 text-gray-400">（{r.bet_count}点）</span>
                   </div>
                 </div>
 

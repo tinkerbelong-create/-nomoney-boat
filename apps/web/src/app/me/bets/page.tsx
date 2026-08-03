@@ -37,7 +37,12 @@ export default async function BetsPage({
   const settled = bets.filter((b: any) => b.status === 'won' || b.status === 'lost');
   const stake = settled.reduce((s: number, b: any) => s + b.stake, 0);
   const payout = settled.reduce((s: number, b: any) => s + Number(b.payout), 0);
-  const hits = settled.filter((b: any) => b.status === 'won').length;
+  // 的中は「レース単位」で数える（3連単20点のうち1点当たれば1レース的中）
+  const settledRaces = new Set(settled.map((b: any) => b.markets?.events?.id));
+  const hitRaces = new Set(
+    settled.filter((b: any) => b.status === 'won').map((b: any) => b.markets?.events?.id),
+  );
+  const hits = hitRaces.size;
   const waiting = bets.filter((b: any) => b.status === 'placed').length;
 
   const shown = bets.filter((b: any) =>
@@ -68,10 +73,12 @@ export default async function BetsPage({
             </div>
           </div>
           <div className="rounded-xl bg-gray-50 py-3">
-            <div className="text-[10px] text-sub">的中</div>
+            <div className="text-[10px] text-sub">的中レース</div>
             <div className="tabnum mt-0.5 text-base font-bold">
               {hits}
-              <span className="text-[11px] font-normal text-sub">/{settled.length}</span>
+              <span className="text-[11px] font-normal text-sub">
+                /{settledRaces.size}
+              </span>
             </div>
           </div>
           <div className="rounded-xl bg-gray-50 py-3">

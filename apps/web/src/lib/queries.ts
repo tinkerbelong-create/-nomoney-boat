@@ -294,3 +294,21 @@ export async function getVenueRaces(dateYmd: string, venueCode: string) {
     .order('race_number', { ascending: true });
   return data ?? [];
 }
+
+/**
+ * レース単位の成績（投票したレース数と、1点でも当たったレース数）。
+ * 的中率は「点数」ではなく「レース」で数えるほうが感覚に合うため。
+ */
+export async function getRaceSummary(userId: string, seasonCode: string | null) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc('user_race_summary', {
+    p_user_id: userId,
+    p_season_code: seasonCode,
+  });
+  if (error) return { race_count: 0, race_hit_count: 0 };
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    race_count: Number(row?.race_count ?? 0),
+    race_hit_count: Number(row?.race_hit_count ?? 0),
+  };
+}
