@@ -10,6 +10,7 @@ import {
   assertValidLanes,
   BOATRACE_LANES,
 } from '@/core';
+import { findMoneyWord, PRIZE_MAX_LENGTH } from '@/lib/prizes';
 
 /**
  * 投票する。
@@ -272,6 +273,45 @@ export async function setTournamentRace(formData: FormData) {
     p_tournament_id: String(formData.get('tournamentId') ?? ''),
     p_event_id: String(formData.get('eventId') ?? ''),
     p_add: formData.get('add') === '1',
+  });
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/tournaments/${formData.get('tournamentId')}`);
+  return { ok: true as const };
+}
+
+/**
+ * 景品を決める（主催者だけ）。
+ *
+ * サイトは景品を表示するだけで、用意も受け渡しもしない。
+ * 現金・ギフト券・換金できるものはここで弾く。
+ * 画面でも同じチェックをしているが、画面のチェックは迂回できるので
+ * 保存の直前にもう一度見る。
+ */
+export async function setTournamentPrizes(formData: FormData) {
+  const prizes = [1, 2, 3].map((n) =>
+    String(formData.get(`prize${n}`) ?? '')
+      .trim()
+      .slice(0, PRIZE_MAX_LENGTH),
+  );
+
+  for (const p of prizes) {
+    const bad = p ? findMoneyWord(p) : null;
+    if (bad) {
+      return {
+        ok: false as const,
+        error:
+          `「${bad}」は景品にできません。` +
+          `現金・ギフト券・換金できるものは扱えない決まりです。`,
+      };
+    }
+  }
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc('set_tournament_prizes', {
+    p_tournament_id: String(formData.get('tournamentId') ?? ''),
+    p_1: prizes[0],
+    p_2: prizes[1],
+    p_3: prizes[2],
   });
   if (error) return { ok: false as const, error: error.message };
   revalidatePath(`/tournaments/${formData.get('tournamentId')}`);

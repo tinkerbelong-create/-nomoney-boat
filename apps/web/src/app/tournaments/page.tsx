@@ -70,6 +70,12 @@ export default async function TournamentsPage() {
                       {fmtDate(t.starts_at)} {fmtTime(t.starts_at)} 〜 {fmtDate(t.ends_at)}{' '}
                       {fmtTime(t.ends_at)}
                     </div>
+                    {/* 景品があるなら一覧でも見せる。参加する理由になる。 */}
+                    {t.prize_1 && (
+                      <div className="mt-1 truncate text-[11px] font-semibold text-amber-800">
+                        🎁 優勝 {t.prize_1}
+                      </div>
+                    )}
                   </Link>
                 </li>
               );
@@ -96,6 +102,10 @@ export default async function TournamentsPage() {
             <li>大会ポイントが0になったらそこで終了です。追加はできません。</li>
             <li>始まったあとの参加はできません。</li>
             <li>終わると、残った大会ポイントがそのまま持ちポイントに戻ります。</li>
+            <li>
+              主催者は景品を決められます。景品は主催者が自分で用意するもので、サイトは表示するだけです。
+              現金・ギフト券など換金できるものは景品にできません。
+            </li>
           </ul>
         </section>
       </main>

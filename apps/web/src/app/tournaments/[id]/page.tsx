@@ -8,7 +8,7 @@ import { notFound } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { TabBar } from '@/components/TabBar';
 import { AutoRefresh } from '@/components/AutoRefresh';
-import { AnnouncementForm, RaceToggle } from '@/components/TournamentForms';
+import { AnnouncementForm, RaceToggle, PrizeForm } from '@/components/TournamentForms';
 import { Countdown } from '@/components/Countdown';
 import {
   requireProfile,
@@ -53,6 +53,12 @@ export default async function TournamentPage({
 
   const serverNow = Date.now();
   const running = t.status === 'running';
+
+  // 景品。書かれていない順位は飛ばす。
+  const prizes = [t.prize_1, t.prize_2, t.prize_3];
+  const hasPrize = prizes.some((p) => p.length > 0);
+  // 終わったあとは、順位表と突き合わせて「誰が何をもらうか」を出す
+  const winners = (ranking as any[]).slice(0, 3);
 
   return (
     <>
@@ -116,6 +122,58 @@ export default async function TournamentPage({
           </div>
         )}
 
+        {/* 景品。参加する理由になるので、順位表より先に出す。 */}
+        {(hasPrize || (t.is_owner && t.status !== 'finished' && t.status !== 'cancelled')) && (
+          <section className="border-b-8 border-gray-50">
+            <h2 className="bg-gray-50 px-4 py-1.5 text-[11px] font-bold text-sub">🎁 景品</h2>
+
+            {hasPrize && (
+              <ul className="divide-y divide-line">
+                {prizes.map((prize, i) =>
+                  prize ? (
+                    <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full
+                                    text-xs font-bold ${
+                                      i === 0
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : i === 1
+                                          ? 'bg-slate-100 text-slate-700'
+                                          : 'bg-amber-100 text-amber-800'
+                                    }`}
+                      >
+                        {i + 1}位
+                      </span>
+                      <span className="min-w-0 flex-1 break-words text-sm font-semibold">
+                        {prize}
+                      </span>
+                      {/* 終わっていれば、その順位の人を出す */}
+                      {t.status === 'finished' && winners[i] && (
+                        <span className="shrink-0 text-[11px] font-bold text-sub">
+                          → {winners[i].display_name}
+                        </span>
+                      )}
+                    </li>
+                  ) : null,
+                )}
+              </ul>
+            )}
+
+            <p className="px-4 py-2.5 text-[10px] leading-relaxed text-sub">
+              景品は主催者が用意します。サイトは表示するだけで、受け渡しには関わりません。
+            </p>
+
+            {t.is_owner && t.status !== 'finished' && t.status !== 'cancelled' && (
+              <div className="border-t border-line px-4 py-3">
+                <PrizeForm
+                  tournamentId={t.id}
+                  initial={[t.prize_1, t.prize_2, t.prize_3]}
+                />
+              </div>
+            )}
+          </section>
+        )}
+
         {/* アナウンス */}
         <section className="border-b-8 border-gray-50">
           <h2 className="bg-gray-50 px-4 py-1.5 text-[11px] font-bold text-sub">
@@ -148,8 +206,10 @@ export default async function TournamentPage({
                     r.is_me ? 'bg-amber-50' : ''
                   }`}
                 >
-                  <span className="tabnum w-6 text-center text-sm font-bold text-sub">
+                  <span className="tabnum w-6 shrink-0 text-center text-sm font-bold text-sub">
                     {i + 1}
+                    {/* 景品のある順位には目印。狙う気持ちが出るように。 */}
+                    {prizes[i] && <span className="block text-[10px]">🎁</span>}
                   </span>
                   <div className="min-w-0 flex-1">
                     <Link

@@ -451,6 +451,10 @@ export interface Tournament {
   starts_at: string;
   ends_at: string;
   status: 'open' | 'running' | 'finished' | 'cancelled';
+  /** 主催者が決めた景品。空文字ならなし。サイトは表示するだけ。 */
+  prize_1: string;
+  prize_2: string;
+  prize_3: string;
   member_count: number;
   race_count: number;
   is_owner: boolean;
@@ -466,6 +470,9 @@ export async function getMyTournaments(): Promise<Tournament[]> {
     ...t,
     entry_fee: Number(t.entry_fee),
     my_points: Number(t.my_points),
+    prize_1: t.prize_1 ?? '',
+    prize_2: t.prize_2 ?? '',
+    prize_3: t.prize_3 ?? '',
   })) as Tournament[];
 }
 
