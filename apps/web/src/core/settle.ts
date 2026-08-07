@@ -103,8 +103,12 @@ export async function settleEvent(
     console.warn('[settle] キャッシュバックに失敗:', e);
   }
 
-  // このレースに関わった人の称号を判定する。
+  // このレースに関わった人の称号と、水槽の生き物を判定する。
   // 失敗しても精算はすでに終わっているので、握りつぶして先に進む。
+  //
+  // 生き物の抽選は award_creature の中でDB側の乱数を引く。
+  // creature_draws にレース単位の一意制約があるので、
+  // このバッチが何度走っても引き直しにはならない。
   try {
     const { data: players } = await supabase
       .from('bets')
@@ -113,9 +117,15 @@ export async function settleEvent(
     const ids = [...new Set((players ?? []).map((p: any) => p.user_id))];
     for (const id of ids) {
       await supabase.rpc('award_badges', { p_user_id: id });
+      const { data: got, error: ce } = await supabase.rpc('award_creature', {
+        p_user_id: id,
+        p_event_id: eventId,
+      });
+      if (ce) console.warn('[settle] 生き物の付与に失敗:', ce.message);
+      else if (got) console.log(`[creature] ${id} -> ${got}`);
     }
   } catch (e) {
-    console.warn('[settle] 称号の判定に失敗:', e);
+    console.warn('[settle] 称号・生き物の判定に失敗:', e);
   }
 
   return total;
@@ -177,6 +187,11 @@ async function settleBetsForMarket(
   // 台帳が先。ここで失敗しても bets はまだ placed なので再実行で復旧できる。
   //
   // 大会の投票は大会ポイントの台帳へ、それ以外はふだんの台帳へ入れる。
+  //
+  // 大会機能は画面ごと撤去したが、この分岐は残す。
+  // 撤去前に投票された大会の舟券がまだ残っている可能性があり、
+  // それを普通の台帳に入れてしまうと収支が狂うため。
+  // tournament_id が入った投票が無くなったら、この分岐は消してよい。
   // 財布を分けているので、ここを間違えるとポイントが増減しない。
   const normalWon = won.filter((w) => !w.tournament_id);
   const tourWon = won.filter((w) => w.tournament_id);

@@ -41,8 +41,6 @@ interface Props {
   officialOddsUrl?: string;
   /** お題レースのキャッシュバック。ふつうのレースでは undefined */
   featureCashback?: { rate: number; max: number; used: number };
-  /** このレースで使える大会（参加済み・開催中・対象レースのものだけ） */
-  tournaments?: { id: string; name: string; points: number }[];
 }
 
 const QUICK_STAKES = [100, 500, 1000, 5000];
@@ -54,12 +52,8 @@ export function BetPanel({
   balance,
   officialOddsUrl,
   featureCashback,
-  tournaments = [],
 }: Props) {
-  /** どの財布で買うか。'' なら持ちポイント。 */
-  const [walletId, setWalletId] = useState('');
-  const wallet = tournaments.find((t) => t.id === walletId);
-  const usable = wallet ? wallet.points : balance;
+  const usable = balance;
   const available = BOATRACE_BET_TYPES.filter((bt) =>
     markets.some((m) => m.betTypeCode === bt.code),
   );
@@ -117,8 +111,19 @@ export function BetPanel({
 
     run(false);
 
-    // 締切前はときどき取り直す
-    const id = setInterval(() => run(true), 120_000);
+    // 締切前はときどき取り直す。
+    //
+    // ここで force = true にしてはいけない。
+    // force は ?fresh=1 になり、api/odds の90秒キャッシュを飛ばして
+    // 公式サイトへ直接取りに行く。自動ポーリングでそれをやると、
+    // 同じレースを見ている人数ぶんのリクエストが2分ごとに公式サイトへ飛ぶ。
+    // ingest 側（apps/ingest/src/http.ts）は同時1本・1.2秒間隔を守っているのに、
+    // Web側だけがそれを迂回することになる。
+    //
+    // force = false ならキャッシュに乗るので、何人見ていても
+    // 公式サイトへのアクセスは90秒に1回で済む。
+    // 取り直したい人は「更新」ボタンを押せばよい。
+    const id = setInterval(() => run(false), 120_000);
 
     return () => {
       cancelled = true;
@@ -215,11 +220,11 @@ export function BetPanel({
    * 上限に当たっているときに「まだ増える」と見せないため。
    */
   const cashback = useMemo(() => {
-    if (!featureCashback || wallet) return null;
+    if (!featureCashback) return null;
     const { rate, max, used } = featureCashback;
     const back = (s: number) => Math.min(Math.floor(s * rate), max);
     return { now: back(used), after: back(used + total), rate, max };
-  }, [featureCashback, wallet, total]);
+  }, [featureCashback, total]);
 
   /** 選んだ買い目が的中したときの払戻の幅 */
   const payoutRange = useMemo(() => {
@@ -240,8 +245,7 @@ export function BetPanel({
     fd.set('betTypeCode', betTypeCode);
     fd.set('stake', String(stake));
     fd.set('selections', JSON.stringify(selections));
-    if (walletId) fd.set('tournamentId', walletId);
-
+  
     startTransition(async () => {
       const res = await placeBets(fd);
       if (res.ok) {
@@ -293,38 +297,6 @@ export function BetPanel({
         )}
       </h2>
 
-      {/* どの財布で買うか */}
-      {tournaments.length > 0 && (
-        <div className="border-b border-line px-4 py-2.5">
-          <div className="mb-1.5 text-[11px] font-bold text-sub">どのポイントで買う？</div>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setWalletId('')}
-              className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                walletId === '' ? 'bg-ink text-white' : 'bg-gray-100 text-sub'
-              }`}
-            >
-              持ちポイント {fmtPt(balance)}
-            </button>
-            {tournaments.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setWalletId(t.id)}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                  walletId === t.id ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-900'
-                }`}
-              >
-                🏆 {t.name} {fmtPt(t.points)}
-              </button>
-            ))}
-          </div>
-          {wallet && (
-            <p className="mt-1.5 text-[10px] text-sub">
-              大会ポイントで買います。持ちポイントは減りません。
-            </p>
-          )}
-        </div>
-      )}
 
       {/* 賭け式 */}
       <div className="flex gap-1 overflow-x-auto px-4 py-3">
@@ -679,7 +651,7 @@ export function BetPanel({
 
         {overBalance && (
           <p className="mt-1 text-xs text-red-600">
-            {wallet ? '大会ポイント' : '持ちポイント'}が足りません（残り {fmtPt(usable)}）
+            持ちポイントが足りません（残り {fmtPt(usable)}）
           </p>
         )}
 

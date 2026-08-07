@@ -7,7 +7,9 @@
  *   npm run ingest -- entrants            出走表を取り込む
  *   npm run ingest -- close               締切を過ぎたマーケットを閉じる
  *   npm run ingest -- settle              結果を取得して精算する
- *   npm run ingest -- grant 2026-08       月初のポイント付与
+ *   npm run ingest -- weekly              毎週木曜のポイント付与（木曜以外は何もしない）
+ *   npm run ingest -- backfill-creatures  過去の的中をさかのぼって生き物を配る（1回だけ）
+ *   npm run ingest -- grant 2026-08       旧・月初のポイント付与（0014 以降は未使用）
  *   npm run ingest -- loop                常駐して全部まわす
  *   npm run ingest -- dry-run 20260801    DBに書かずに取得内容を表示（動作確認用）
  */
@@ -57,11 +59,23 @@ async function main() {
       await pickDailyFeature(arg || undefined);
       break;
 
-    // 大会の開始・終了・精算
+    // 【旧機能】大会。画面はすでに撤去した（docs/aquarium-design.md §4）。
+    // DBのテーブルは残してあるので、撤去前に始まっていた大会を
+    // 最後まで終わらせて大会ポイントを持ちポイントに戻すためだけに残す。
+    // 未精算の大会が無くなったら、このコマンドごと消してよい。
     case 'tournaments': {
       const { data, error } = await db().rpc('advance_tournaments');
       if (error) throw error;
       console.log(`[tournaments] ${data} 人ぶん精算しました`);
+      break;
+    }
+
+    // 過去の的中をさかのぼって生き物を配る。水槽を入れた直後に一度だけ叩く。
+    // 何度実行しても、すでに引いたレースは飛ばすので安全。
+    case 'backfill-creatures': {
+      const { data, error } = await db().rpc('backfill_creatures', { p_user_id: null });
+      if (error) throw error;
+      console.log(`[creature] 過去のレース ${data} 件ぶんを配りました`);
       break;
     }
 
@@ -115,8 +129,9 @@ async function main() {
   settle                結果を取得して精算する
   settle-old            12時間以上前の取り残しを処理する
   weekly                毎週木曜のポイント付与（木曜以外は何もしない）
+  backfill-creatures    過去の的中をさかのぼって生き物を配る（初回だけ）
   titles [YYYY-MM]      月間タイトルを発行する
-  tournaments           大会の開始・終了・精算
+  tournaments           【旧】残っている大会を終わらせる（画面は撤去済み）
   loop                  常駐して全部まわす
   dry-run [YYYYMMDD]    DBに書かずに取得内容だけ表示する`);
       process.exit(1);

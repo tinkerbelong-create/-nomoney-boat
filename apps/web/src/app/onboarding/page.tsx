@@ -64,8 +64,9 @@ export default function OnboardingPage() {
       </form>
 
       <p className="mt-8 rounded-xl bg-amber-50 p-4 text-[11px] leading-relaxed text-sub">
-        登録すると今月分の <strong className="text-ink">50,000pt</strong> が配られます。
-        毎月1日に全員リセットされ、また50,000ptからのスタートです。
+        登録すると <strong className="text-ink">50,000pt</strong> が配られます。
+        そのあとは <strong className="text-ink">毎週木曜日に5,000pt</strong>。
+        使い切ってもなくなりません。
         <br />
         このポイントに換金性はありません。
       </p>

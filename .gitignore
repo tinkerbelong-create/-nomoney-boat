@@ -5,3 +5,7 @@ node_modules/
 *.log
 .DS_Store
 .fuse_hidden*
+
+# TypeScript のビルドキャッシュ
+*.tsbuildinfo
+__pycache__/

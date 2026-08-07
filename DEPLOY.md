@@ -228,7 +228,7 @@ GitHub リポジトリの **Actions** タブを開きます。
 >
 > 1. 「新規登録」からメールアドレスとパスワードで登録
 > 2. ユーザーIDを決める（フレンド検索に使うので教えて）
-> 3. 毎月1日に50,000ポイントもらえる
+> 3. 登録すると50,000ポイントもらえる。あとは毎週木曜に5,000ポイント
 >
 > 登録したらユーザーID教えて。こっちから友達申請するね。
 > 自分のIDは `あなたのユーザーID` です。
@@ -289,20 +289,31 @@ Confirm email をオフにしていれば、登録にメールは不要です。
 | やること | いつ | どうやって |
 |---|---|---|
 | 何もしない | 普段 | 自動で動きます |
-| ポイントの配布 | 毎月1日 | 自動（`daily.yml` が実行） |
-| シーズンの追加 | 年に1回程度 | `supabase/seed.sql` の `seasons` に翌年の月を追加してSQL実行 |
+| ポイントの配布 | 登録時と毎週木曜 | 自動（`daily.yml` が実行） |
+| シーズンの追加 | 2年に1回 | 下のSQLを実行 |
 
-**シーズンだけは期限があります。** 現在 2026年8月〜10月分しか入っていません。
-11月になる前に、Supabase の SQL Editor で次を実行してください。
+**シーズンだけは期限があります。**
+`0014_points.sql` を実行した時点から **24か月ぶん** が自動で入っています。
+それを過ぎる前に、Supabase の SQL Editor で次を実行してください
+（今日から2年ぶんを足します。何度実行しても安全です）。
 
 ```sql
-insert into seasons (code, starts_at, ends_at, grant_amount) values
-  ('2026-11', '2026-11-01 00:00:00+09', '2026-12-01 00:00:00+09', 50000),
-  ('2026-12', '2026-12-01 00:00:00+09', '2027-01-01 00:00:00+09', 50000)
+insert into seasons (code, starts_at, ends_at, grant_amount)
+select to_char(m, 'YYYY-MM'), m, m + interval '1 month', 0
+from generate_series(
+  date_trunc('month', now() at time zone 'Asia/Tokyo'),
+  date_trunc('month', now() at time zone 'Asia/Tokyo') + interval '24 months',
+  interval '1 month'
+) as m
 on conflict (code) do nothing;
 ```
 
 シーズンが切れると投票できなくなるので、ここだけ気をつけてください。
+いま何月ぶんまで入っているかは `select max(code) from seasons;` で確認できます。
+
+> シーズンはもう「ポイントのリセットの単位」ではありません。
+> ランキングの「今月」を数えるためのただの区切りです。
+> `grant_amount` は使われていないので 0 で構いません。
 
 ---
 

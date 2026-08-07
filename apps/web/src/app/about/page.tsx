@@ -55,32 +55,6 @@ export default function AboutPage() {
           </p>
         </section>
 
-        <section>
-          <h2 className="mb-2 text-base font-bold">大会の景品について</h2>
-          <p className="text-sub">
-            大会の主催者は、1位から3位までの景品を決められます。この景品について、
-            守ってもらう決まりがあります。
-          </p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sub">
-            <li>
-              <strong className="text-ink">景品は主催者が全額を自分で負担します。</strong>
-              参加者からお金や物を集めて景品にすることはできません。
-            </li>
-            <li>
-              現金・ギフト券・電子マネー・暗号資産など、
-              <strong className="text-ink">換金できるものは景品にできません。</strong>
-            </li>
-            <li>参加費（ポイント）と景品はつながっていません。</li>
-            <li>
-              本サイトは景品の用意・受け渡し・その後のやりとりに一切関与しません。
-              景品をめぐるトラブルについて責任を負いません。
-            </li>
-          </ul>
-          <p className="mt-2 text-sub">
-            主催者は景品を決めるたびに、上の内容への同意を求められます。
-            同意した文面・そのときの景品・日時は記録として残り、参加者全員が見られます。
-          </p>
-        </section>
 
         <section>
           <h2 className="mb-2 text-base font-bold">舟券は買えません</h2>

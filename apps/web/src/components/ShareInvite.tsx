@@ -12,7 +12,7 @@ export function ShareInvite({ url, handle }: { url: string; handle: string }) {
 
   const message =
     `ノーマネー予想対戦、一緒にやりませんか。\n` +
-    `お金は使いません。毎月50,000ptが配られて、収支を競うだけです。\n\n` +
+    `お金は使いません。登録で50,000pt、毎週木曜に5,000ptが配られて、収支を競うだけです。\n\n` +
     `${url}\n\n` +
     `登録したら、フレンド検索で「${handle}」を探して申請してください。`;
 

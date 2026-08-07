@@ -1,7 +1,7 @@
 /**
  * 人のプロフィール。
  *
- * 自分・フレンド・同じ大会に出ている人が見られる。
+ * 自分とフレンドだけが見られる。
  * 称号・自慢の的中・月ごとの成績を並べて、その人の「歴史」が見えるようにしている。
  */
 
@@ -43,7 +43,7 @@ export default async function UserPage({
   const isMe = target.id === me.id;
   const earned = badges.filter((b) => b.earned_at);
 
-  // フレンドでも同じ大会でもない相手には何も見せない
+  // フレンドでない相手には何も見せない
   if (!isMe && badges.length === 0) {
     return (
       <>
@@ -52,7 +52,7 @@ export default async function UserPage({
           <p className="text-3xl">🔒</p>
           <p className="mt-3 text-sm font-semibold">この人の成績は見られません</p>
           <p className="mt-1 text-xs leading-relaxed text-sub">
-            フレンドになるか、同じ大会に参加すると見られます。
+            フレンドになると見られます。
           </p>
           <Link
             href="/friends/search"

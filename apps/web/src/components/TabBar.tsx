@@ -7,7 +7,7 @@ const TABS = [
   { href: '/', label: 'ランキング', icon: '📊' },
   { href: '/races', label: 'レース', icon: '🚤' },
   { href: '/me/bets', label: '舟券', icon: '🎫' },
-  { href: '/tournaments', label: '大会', icon: '🏆' },
+  { href: '/aquarium', label: '水槽', icon: '🐟' },
   { href: '/me', label: 'マイ', icon: '👤' },
 ];
 
