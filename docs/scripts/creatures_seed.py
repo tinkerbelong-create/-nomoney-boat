@@ -54,9 +54,14 @@ for code, vn, n, kj, cat, moto, desc in lo['LORDS']:
 if len(rows) != 324: err.append(f'{len(rows)}行（324のはず）')
 if len({r[0] for r in rows}) != len(rows): err.append('code が重複')
 if len({r[1] for r in rows}) != len(rows): err.append('name が重複')
+import re as _re
 for r in rows:
     conds = sum(1 for x in (r[8], r[9], r[11]) if x) + (1 if r[10] else 0)
     if conds > 1: err.append(f'{r[1]}: 条件が2つ以上ついている')
+    # 色は #rrggbb ちょうど7文字。'##...' になっていたことが実際にある
+    for col in (r[5], r[6]):
+        if not _re.fullmatch(r'#[0-9a-fA-F]{6}', col):
+            err.append(f'{r[1]}: 色の形が不正 「{col}」')
 
 print('検証:', '全項目パス' if not err else f'{len(err)}件')
 for e in err[:10]: print('  NG', e)
@@ -65,7 +70,7 @@ if err: sys.exit(1)
 vals = []
 for c, n, s, cat, fam, a, b, mv, water, area, night, venue, desc, so in rows:
     vals.append('  (' + ', '.join([
-        q(c), q(n), str(s), q(cat), q(fam), q('#'+a), q('#'+b), q(mv),
+        q(c), q(n), str(s), q(cat), q(fam), q(a), q(b), q(mv),
         q(water) if water else 'null',
         q(area) if area else 'null',
         'true' if night else 'false',
